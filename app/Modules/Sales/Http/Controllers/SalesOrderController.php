@@ -1498,7 +1498,7 @@ class SalesOrderController extends Controller
      * says "Cannot move stock on <when> from batch #N, which was received on
      * <when>"; anything else is passed on as it was.
      */
-    private static function challanDateProblem(string $message): string
+    public static function challanDateProblem(string $message): string
     {
         if (preg_match('/^Cannot move stock on (\S+) .* received on (\S+) /', $message, $m) === 1) {
             $out = Carbon::parse($m[1])->format('d/m/Y');

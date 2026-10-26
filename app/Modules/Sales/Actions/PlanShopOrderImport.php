@@ -6,15 +6,22 @@ use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Crm\Support\PhoneIdentity;
+use App\Modules\Foundation\Enums\MoneyAccountType;
+use App\Modules\Foundation\Models\AccountingPeriod;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Sales\Couriers\Booking\ParcelDraft;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
+use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\NotForSale;
+use App\Modules\Sales\Support\OrderChannelDetails;
 use App\Modules\Sales\Support\SalesOrderDestination;
 use App\Modules\Sales\Support\ShopOrderImportPlan;
 use App\Modules\Sales\Support\ShopOrderSheet;
@@ -46,6 +53,7 @@ class PlanShopOrderImport
         'order_date', 'brand', 'channel', 'customer_name', 'phone', 'alt_phone', 'district', 'thana', 'area',
         'address_line', 'landmark', 'order_discount', 'delivery_charge', 'advance_paid', 'advance_method',
         'advance_reference', 'payment_method', 'note', 'weight_grams',
+        'warehouse', 'courier', 'consignment_id', 'sent_on', 'delivered_on', 'collected',
     ];
 
     /** @var list<array{line: int|null, order_ref: string|null, field: string, message: string}> */
@@ -53,6 +61,20 @@ class PlanShopOrderImport
 
     /** @var list<array{line: int|null, order_ref: string|null, message: string}> */
     private array $warnings = [];
+
+    /** @var Collection<int, MoneyAccount> the business's courier accounts, for past parcels */
+    private Collection $couriers;
+
+    /** @var Collection<int, Warehouse> */
+    private Collection $warehouses;
+
+    /** "courier id|consignment id" => the order_ref that carries it in this file */
+    private array $consignmentsInFile = [];
+
+    /** Why this person may not import a past parcel, worked out once per file (null = they may). */
+    private ?string $pastParcelRefusal = null;
+
+    private bool $pastParcelRefusalSaid = false;
 
     public function __construct(private readonly ResolveSellingPrice $prices) {}
 
@@ -64,6 +86,12 @@ class PlanShopOrderImport
     {
         $this->errors = [];
         $this->warnings = [];
+        $this->consignmentsInFile = [];
+        $this->pastParcelRefusalSaid = false;
+        $this->pastParcelRefusal = self::pastParcelRefusal($by);
+        $this->couriers = MoneyAccount::query()->where('business_id', $businessId)
+            ->where('type', MoneyAccountType::Courier->value)->orderBy('id')->get();
+        $this->warehouses = Warehouse::query()->where('business_id', $businessId)->orderBy('id')->get();
 
         foreach ($ignoredColumns as $column) {
             $this->warn(null, null, "Column \"{$column}\" is not part of the template and was not read.");
@@ -120,6 +148,8 @@ class PlanShopOrderImport
                 $orders[$ref] = $order;
             }
         }
+
+        $this->warnShortStock($orders);
 
         return new ShopOrderImportPlan(
             orders: $orders,
@@ -276,6 +306,8 @@ class PlanShopOrderImport
             $this->error($first, $ref, 'sku', 'The order has no product lines.');
         }
 
+        $parcel = $this->pastParcel($ref, $first, $values, $date, $total, $advance);
+
         if (count($this->errors) !== $before || $destination === null || $date === null) {
             return null;
         }
@@ -306,7 +338,219 @@ class PlanShopOrderImport
             'payment_method' => $payment,
             'note' => $values['note'] === '' ? null : $values['note'],
             'weight_grams' => $weight,
+            'parcel' => $parcel,
         ];
+    }
+
+    /**
+     * ⭐ Past parcels (Joy, 26 Oct 2026): about a hundred CarryBee orders of
+     * September and October went out and were delivered before the ERP took
+     * them. A sheet row with a consignment id brings the whole history at once:
+     * the order approved, its challan on the day it left, the parcel under its
+     * real consignment id, and Delivered on the day with what was collected.
+     *
+     * ⚠⚠ Everything that can be said from the sheet is said HERE, with the row:
+     * who may do it, the courier, the warehouse, the id, the days, the money.
+     * Whether the stock was there on that day is left to Apply (a back-dated
+     * challan meets FIFO and the batch dates there); only a plain shortfall
+     * against today's stock is warned about (warnShortStock).
+     *
+     * ⚠ What the courier collected must be what the order still owed. A door
+     * discount needs a reason and maybe the Owner (RecordConsignmentOutcome), so
+     * the import refuses a difference instead of settling it quietly.
+     *
+     * @param  array<string, string>  $values
+     * @return array<string, mixed>|null null when the order is not a past parcel (or has errors)
+     */
+    private function pastParcel(string $ref, int $first, array $values, ?Carbon $orderDate, Money $total, Money $advance): ?array
+    {
+        $given = array_filter(ShopOrderSheet::PAST_PARCEL_COLUMNS, fn (string $c) => ($values[$c] ?? '') !== '');
+
+        if ($given === []) {
+            return null;
+        }
+
+        $before = count($this->errors);
+
+        if ($values['consignment_id'] === '') {
+            $this->error($first, $ref, 'consignment_id', 'This order has '.implode(', ', $given).' but no consignment_id. Give the courier\'s consignment id to import it as a past parcel, or leave those columns blank for a new order.');
+
+            return null;
+        }
+
+        if ($this->pastParcelRefusal !== null) {
+            if (! $this->pastParcelRefusalSaid) {
+                $this->error($first, $ref, 'consignment_id', $this->pastParcelRefusal);
+                $this->pastParcelRefusalSaid = true;
+            }
+
+            return null;
+        }
+
+        foreach (['warehouse', 'courier', 'sent_on', 'delivered_on'] as $column) {
+            if ($values[$column] === '') {
+                $this->error($first, $ref, $column, "A past parcel needs {$column} too.");
+            }
+        }
+
+        // The courier: an active courier account of this business, with its ledger account.
+        $courier = null;
+
+        if ($values['courier'] !== '') {
+            $key = mb_strtolower(trim($values['courier']));
+            $courier = $this->couriers->first(fn (MoneyAccount $a) => mb_strtolower(trim((string) $a->name)) === $key);
+            $active = $this->couriers->filter(fn (MoneyAccount $a) => $a->is_active)->pluck('name');
+
+            if ($courier === null) {
+                $this->error($first, $ref, 'courier', "Courier \"{$values['courier']}\" is not a courier account of this business".($active->isEmpty() ? ' (none is set up under Bank & cash).' : ' (choose: '.$active->implode(', ').').'));
+            } elseif (! $courier->is_active) {
+                $this->error($first, $ref, 'courier', "Courier account {$courier->name} is switched off.");
+                $courier = null;
+            } elseif ($courier->account_id === null) {
+                $this->error($first, $ref, 'courier', "{$courier->name} has no ledger account yet. Set it to 1145 Receivable from Couriers under Bank & cash.");
+                $courier = null;
+            }
+        }
+
+        // The warehouse: by name or code, active.
+        $warehouse = null;
+
+        if ($values['warehouse'] !== '') {
+            $key = mb_strtolower(trim($values['warehouse']));
+            $warehouse = $this->warehouses->first(fn (Warehouse $w) => mb_strtolower(trim((string) $w->name)) === $key || ($w->code !== null && mb_strtolower(trim((string) $w->code)) === $key));
+
+            if ($warehouse === null) {
+                $this->error($first, $ref, 'warehouse', "Warehouse \"{$values['warehouse']}\" is not a warehouse of this business.");
+            } elseif (! $warehouse->is_active) {
+                $this->error($first, $ref, 'warehouse', "Warehouse {$warehouse->name} is switched off.");
+                $warehouse = null;
+            }
+        }
+
+        // The consignment id: new for this courier, and once in the file.
+        $number = trim($values['consignment_id']);
+
+        if (mb_strlen($number) > 100) {
+            $this->error($first, $ref, 'consignment_id', 'The consignment id is longer than 100 characters.');
+        } elseif ($courier !== null) {
+            $key = $courier->id.'|'.mb_strtolower($number);
+
+            if (isset($this->consignmentsInFile[$key])) {
+                $this->error($first, $ref, 'consignment_id', "{$courier->name} consignment {$number} is also on order {$this->consignmentsInFile[$key]} in this file. One parcel, one order.");
+            } else {
+                $this->consignmentsInFile[$key] = $ref;
+            }
+
+            $used = Consignment::query()->withoutGlobalScopes()->where('money_account_id', $courier->id)->where('consignment_number', $number)
+                ->with('delivery:id,delivery_number')->first();
+
+            if ($used !== null) {
+                $this->error($first, $ref, 'consignment_id', "{$courier->name} consignment {$number} is already recorded in the ERP".($used->delivery ? " (challan {$used->delivery->delivery_number})" : '').'.');
+            }
+        }
+
+        // The days: order <= sent <= delivered <= today; the challan's month open.
+        $sent = $values['sent_on'] === '' ? null : $this->date($values['sent_on'], $first, $ref, 'sent_on', 'sent_on date');
+        $delivered = $values['delivered_on'] === '' ? null : $this->date($values['delivered_on'], $first, $ref, 'delivered_on', 'delivered_on date');
+
+        if ($sent !== null && $orderDate !== null && $sent->lt($orderDate)) {
+            $this->error($first, $ref, 'sent_on', "The parcel cannot have left ({$sent->format('d/m/Y')}) before it was ordered ({$orderDate->format('d/m/Y')}).");
+        }
+
+        if ($sent !== null && $delivered !== null && $delivered->lt($sent)) {
+            $this->error($first, $ref, 'delivered_on', "The parcel cannot have been delivered ({$delivered->format('d/m/Y')}) before it left ({$sent->format('d/m/Y')}).");
+        }
+
+        if ($sent !== null && AccountingPeriod::isClosedOn($sent)) {
+            $this->error($first, $ref, 'sent_on', "{$sent->format('d/m/Y')} is in a closed month, so no challan can be dated then.");
+        }
+
+        // The money: exactly what the order still owed after the advance.
+        $due = Money::ofMinor(max(0, $total->minor - $advance->minor));
+        $collected = $this->money($values['collected'], $first, $ref, 'collected');
+
+        if ($collected !== null && $collected->minor !== $due->minor) {
+            $this->error($first, $ref, 'collected', "The courier collected {$collected->format()}, but the order still owed {$due->format()} (order {$total->format()}".($advance->minor > 0 ? ", less the advance {$advance->format()}" : '').'). The import records no door discount or short collection: correct the sheet, or import the order without its parcel and record the delivery on the order.');
+        }
+
+        if (count($this->errors) !== $before || $courier === null || $warehouse === null || $sent === null || $delivered === null) {
+            return null;
+        }
+
+        if ($advance->minor > 0) {
+            $this->warn($first, $ref, "Order {$ref} is a past parcel with an advance of {$advance->format()}: choose the account the {$values['advance_method']} advance went into below, or the order fails (the courier collected only the rest).");
+        }
+
+        return [
+            'warehouse' => $warehouse,
+            'courier' => $courier,
+            'consignment_id' => $number,
+            'sent_on' => $sent->toDateString(),
+            'delivered_on' => $delivered->toDateString(),
+            'collected' => $due,
+        ];
+    }
+
+    /**
+     * Who may import a past parcel: it is approved, back-dated, sent and paid
+     * for in one go, so it asks for everything those steps ask on the screen.
+     * ⚠ Back-dating is the order form's own rule (OrderChannelDetails::mayBackdate:
+     * Manager or Owner), not a new permission.
+     */
+    public static function pastParcelRefusal(User $by): ?string
+    {
+        if (! OrderChannelDetails::mayBackdate($by)) {
+            return 'A past parcel is an order on an earlier day. Only a Manager or the Owner may enter one; import it as a new order without the parcel columns, or ask them.';
+        }
+
+        foreach (['sales.orders.approve' => 'approve orders', 'sales.sell' => 'record challans', 'sales.receipt.record' => 'record receipts'] as $permission => $what) {
+            if (! $by->can($permission)) {
+                return "A past parcel is approved, sent and paid for at once, and you may not {$what}. Ask a Manager or the Owner.";
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * ⚠ Only a warning: today's stock is not the stock of the day a parcel left,
+     * and Apply is where FIFO and the batch dates decide. But a file that wants
+     * more than the warehouse holds even now will certainly fail, so it is said.
+     *
+     * @param  array<string, array<string, mixed>>  $orders
+     */
+    private function warnShortStock(array $orders): void
+    {
+        $wanted = [];
+
+        foreach ($orders as $order) {
+            if ($order['parcel'] === null) {
+                continue;
+            }
+
+            foreach ($order['lines'] as $line) {
+                $key = $order['parcel']['warehouse']->id.'|'.$line['product']->id;
+                $wanted[$key] = ($wanted[$key] ?? 0) + AvailableToSell::scale((string) $line['quantity']);
+            }
+        }
+
+        if ($wanted === []) {
+            return;
+        }
+
+        $productIds = array_values(array_unique(array_map(fn (string $k) => (int) explode('|', $k)[1], array_keys($wanted))));
+        $onHand = AvailableToSell::onHandScaled($productIds);
+        $products = Product::query()->withoutGlobalScopes()->whereIn('id', $productIds)->get()->keyBy('id');
+
+        foreach ($wanted as $key => $quantity) {
+            [$warehouseId, $productId] = array_map('intval', explode('|', $key));
+            $have = $onHand[$warehouseId][$productId] ?? 0;
+
+            if ($quantity > $have) {
+                $warehouse = $this->warehouses->firstWhere('id', $warehouseId);
+                $this->warn(null, null, 'The past parcels in this file take '.AvailableToSell::unscale($quantity)." of {$products->get($productId)?->name} from {$warehouse?->name}, which holds ".AvailableToSell::unscale($have).' today. Enter the missing purchase or opening stock first, or those orders will fail.');
+            }
+        }
     }
 
     /**
@@ -516,7 +760,7 @@ class PlanShopOrderImport
             ->keyBy(fn (Product $p) => mb_strtolower((string) $p->sku));
     }
 
-    private function date(string $value, int $line, string $ref): ?Carbon
+    private function date(string $value, int $line, string $ref, string $field = 'order_date', string $label = 'order date'): ?Carbon
     {
         $value = trim($value);
         $date = null;
@@ -536,7 +780,7 @@ class PlanShopOrderImport
         }
 
         if ($date === null) {
-            $this->error($line, $ref, 'order_date', $value === '' ? 'The order date is missing.' : "\"{$value}\" is not a date. Write 2026-10-10 or 10/10/2026.");
+            $this->error($line, $ref, $field, $value === '' ? 'The '.$label.' is missing.' : "\"{$value}\" is not a date. Write 2026-10-10 or 10/10/2026.");
 
             return null;
         }
@@ -544,7 +788,7 @@ class PlanShopOrderImport
         $date = $date->startOfDay();
 
         if ($date->greaterThan(Carbon::today())) {
-            $this->error($line, $ref, 'order_date', "The order date {$date->toDateString()} is in the future.");
+            $this->error($line, $ref, $field, 'The '.$label." {$date->toDateString()} is in the future.");
 
             return null;
         }

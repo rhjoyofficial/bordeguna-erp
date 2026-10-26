@@ -60,7 +60,18 @@ final class ShopOrderSheet
         'payment_method' => ['order', 'cod or prepaid. Blank = cod.'],
         'note' => ['order', 'Optional.'],
         'weight_grams' => ['order', 'Optional parcel weight in grams. Blank = worked out from the products.'],
+        // ⭐ Past parcels (Joy, 26 Oct 2026): an order that already went out by
+        // courier and was delivered is entered with its whole history in one go.
+        'warehouse' => ['order', 'Past parcel only. The warehouse the parcel left from (its name or code). Required with consignment_id.'],
+        'courier' => ['order', 'Past parcel only. The courier account name in Bank & cash, for example CarryBee - Bionic. Required with consignment_id.'],
+        'consignment_id' => ['order', 'Past parcel only. The courier\'s consignment id. Filled = the order is imported approved, sent and delivered (needs a Manager or the Owner). Blank = a new order, as before.'],
+        'sent_on' => ['order', 'Past parcel only. The day the parcel left (the challan date), not before order_date. 2026-09-19 or 19/09/2026.'],
+        'delivered_on' => ['order', 'Past parcel only. The day the courier delivered it, not before sent_on.'],
+        'collected' => ['order', 'Past parcel only. Taka the courier collected. Blank = what the order still owed after any advance; a different figure is refused (no door discounts in the import).'],
     ];
+
+    /** The columns that make an order a past parcel (Joy, 26 Oct 2026). */
+    public const PAST_PARCEL_COLUMNS = ['warehouse', 'courier', 'consignment_id', 'sent_on', 'delivered_on', 'collected'];
 
     public const REQUIRED_COLUMNS = ['order_ref', 'order_date', 'customer_name', 'phone', 'district', 'thana', 'address_line', 'sku', 'quantity'];
 
