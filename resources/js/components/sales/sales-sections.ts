@@ -142,6 +142,14 @@ export const SALES_SECTIONS: ModuleSection[] = [
             // ⭐ B11 (24 Oct 2026): customer advances (2150), used on invoices or paid back.
             { title: 'Advances', titleKey: 'adv.tab', url: '/sales/advances', can: sales },
             { title: 'Courier payouts', url: '/sales/courier-statements', can: sales },
+            // ⭐ Joy, 26 Oct 2026: every customer, supplier and courier on one page.
+            {
+                title: 'Who owes what',
+                titleKey: 'wow.title',
+                url: '/accounting/who-owes-what',
+                can: (f) => !!f.canViewParties,
+                keywords: 'who owes what balances dues receivable payable advance net customer supplier courier party',
+            },
             { title: 'Receivables ageing', url: '/accounting/receivables-ageing', can: (f) => f.canViewOperatingReports && inSalesGroup(f) },
             { title: 'Customer statement', url: '/accounting/customer-statement', can: (f) => f.canViewOperatingReports && inSalesGroup(f) },
         ],

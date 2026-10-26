@@ -179,3 +179,15 @@ export function PartyCard({ party, side, selfId }: { party: PartyCardProps; side
         </section>
     );
 }
+
+/**
+ * ⭐ Joy, 26 Oct 2026: the one figure for a firm that is both our customer and
+ * our supplier, for the headline tile on either page (the card has the parts).
+ */
+export function bothSidesNet(t: ReturnType<typeof useTranslation>['t'], position: PartyPosition): string {
+    return position.net_side === 'us'
+        ? t('party.net_us', { amount: position.net })
+        : position.net_side === 'them'
+          ? t('party.net_them', { amount: position.net })
+          : t('party.net_even');
+}

@@ -1,4 +1,4 @@
-import { PartyCard, type PartyCardProps } from '@/components/accounting/party-card';
+import { bothSidesNet, PartyCard, type PartyCardProps } from '@/components/accounting/party-card';
 import { type PartyRecord, PartyRecordActions } from '@/components/corrections/party-record-actions';
 import { type PartyDocuments, PartyDocumentsPanel } from '@/components/documents/party-documents-panel';
 import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { codeLabel, formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
@@ -94,6 +95,7 @@ export default function CustomerShow({
     /** ⭐ Samples (25 Oct 2026): what they were given free; null when the reader may not see samples. */
     samples?: SamplesReceived | null;
 }) {
+    const { t } = useTranslation();
     const { canViewAccounting } = usePage<SharedData>().props;
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales', href: '/sales/overview' },
@@ -140,11 +142,28 @@ export default function CustomerShow({
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
-                        <p className="text-muted-foreground text-xs">Owes now</p>
-                        <p className="mt-1 text-xl font-semibold">
-                            {formatMoney(balance.amount)}
-                            {balance.is_credit && <span className="text-muted-foreground ml-1 text-sm">(in credit)</span>}
-                        </p>
+                        {/* ⭐ Joy, 26 Oct 2026: a firm that is also our supplier shows ONE figure here,
+                            both sides together (the card below has the parts), not the invoices alone. */}
+                        {party.position !== null ? (
+                            <>
+                                <p className="text-muted-foreground text-xs">{t('wow.tile_label')}</p>
+                                <p className="mt-1 text-xl font-semibold">{bothSidesNet(t, party.position)}</p>
+                                <p className="text-muted-foreground mt-1 text-xs">
+                                    {t('wow.tile_invoices', { amount: formatMoney(balance.amount) })}
+                                </p>
+                                <Link href="/accounting/who-owes-what" className="text-xs underline">
+                                    {t('wow.tile_link')}
+                                </Link>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-muted-foreground text-xs">Owes now</p>
+                                <p className="mt-1 text-xl font-semibold">
+                                    {formatMoney(balance.amount)}
+                                    {balance.is_credit && <span className="text-muted-foreground ml-1 text-sm">(in credit)</span>}
+                                </p>
+                            </>
+                        )}
                         {balance.ledger_agrees === false && (
                             <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-500">
                                 Ledger disagrees - investigate on the statement

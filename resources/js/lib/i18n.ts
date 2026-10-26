@@ -23,6 +23,7 @@ import { courierSales } from './i18n/courier-sales';
 import { courierSettings } from './i18n/courier-settings';
 import { customerAdvances } from './i18n/customer-advances';
 import { customerLookup } from './i18n/customer-lookup';
+import { whoOwesWhat } from './i18n/who-owes-what';
 import { dashboards } from './i18n/dashboards';
 import { employeeCash } from './i18n/employee-cash';
 import type { Entry } from './i18n/entry';
@@ -769,6 +770,7 @@ const dictionary = {
     ...orderChannels,
     ...samples,
     ...customerLookup,
+    ...whoOwesWhat,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

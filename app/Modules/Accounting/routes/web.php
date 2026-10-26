@@ -51,6 +51,7 @@ use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
 use App\Modules\Accounting\Http\Controllers\VatReturnController;
 use App\Modules\Accounting\Http\Controllers\VatSettingsController;
 use App\Modules\Accounting\Http\Controllers\VoucherController;
+use App\Modules\Accounting\Http\Controllers\WhoOwesWhatController;
 use App\Modules\Foundation\Http\Controllers\CorrectionsReportController;
 use Illuminate\Support\Facades\Route;
 
@@ -440,6 +441,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('set-offs', [SetOffController::class, 'index'])->name('set-offs.index');
         Route::get('set-offs/{setOff}', [SetOffController::class, 'show'])->whereNumber('setOff')->name('set-offs.show');
         Route::get('party-statement', [PartyStatementController::class, 'index'])->name('party-statement');
+        // ⭐ Who owes what (Joy, 26 Oct 2026): every party on one page.
+        Route::get('who-owes-what', [WhoOwesWhatController::class, 'index'])->name('who-owes-what');
+        Route::get('who-owes-what/export', [WhoOwesWhatController::class, 'export'])->name('who-owes-what.export');
     });
     Route::post('set-offs', [SetOffController::class, 'store'])->middleware('can:accounting.set_off.manage')->name('set-offs.store');
     Route::post('set-offs/{setOff}/approve', [SetOffController::class, 'approve'])->whereNumber('setOff')->name('set-offs.approve');

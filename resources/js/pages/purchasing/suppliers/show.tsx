@@ -1,4 +1,4 @@
-import { PartyCard, type PartyCardProps } from '@/components/accounting/party-card';
+import { bothSidesNet, PartyCard, type PartyCardProps } from '@/components/accounting/party-card';
 import { type PartyRecord, PartyRecordActions } from '@/components/corrections/party-record-actions';
 import { type PartyDocuments, PartyDocumentsPanel } from '@/components/documents/party-documents-panel';
 import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
@@ -143,11 +143,25 @@ export default function SupplierShow({
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
-                        <p className="text-muted-foreground text-xs">We owe now</p>
-                        <p className="mt-1 text-xl font-semibold">
-                            {formatMoney(payable.amount)}
-                            {payable.is_credit && <span className="text-muted-foreground ml-1 text-sm">(they owe us)</span>}
-                        </p>
+                        {/* ⭐ Joy, 26 Oct 2026: a firm that is also our customer shows ONE figure here. */}
+                        {party.position !== null ? (
+                            <>
+                                <p className="text-muted-foreground text-xs">{t('wow.tile_label')}</p>
+                                <p className="mt-1 text-xl font-semibold">{bothSidesNet(t, party.position)}</p>
+                                <p className="text-muted-foreground mt-1 text-xs">{t('wow.tile_bills', { amount: formatMoney(payable.amount) })}</p>
+                                <Link href="/accounting/who-owes-what" className="text-xs underline">
+                                    {t('wow.tile_link')}
+                                </Link>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-muted-foreground text-xs">We owe now</p>
+                                <p className="mt-1 text-xl font-semibold">
+                                    {formatMoney(payable.amount)}
+                                    {payable.is_credit && <span className="text-muted-foreground ml-1 text-sm">(they owe us)</span>}
+                                </p>
+                            </>
+                        )}
                     </div>
                     <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
                         <p className="text-muted-foreground text-xs">Billed, lifetime</p>
