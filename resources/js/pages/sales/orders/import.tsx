@@ -48,6 +48,16 @@ interface PlannedOrder {
     payment_method: string;
     cod: string;
     weight_grams: number | null;
+    // ⭐ Past parcels (26 Oct 2026): sent and delivered before the import.
+    parcel: {
+        warehouse: string;
+        courier: string;
+        consignment_id: string;
+        sent_on: string;
+        delivered_on: string;
+        collected: string;
+        summary: string;
+    } | null;
 }
 
 interface Preview {
@@ -61,7 +71,7 @@ interface Preview {
     warnings: Problem[];
     ignored_columns: string[];
     advance_methods: string[];
-    totals: { orders: number; lines: number; new_customers: number; goods: string; total: string; advance: string };
+    totals: { orders: number; lines: number; new_customers: number; goods: string; total: string; advance: string; past_parcels: number };
 }
 
 interface ResultOrder {
@@ -346,7 +356,17 @@ export default function ShopOrderImport({
                                                     className="border-sidebar-border/40 hover:bg-muted/40 cursor-pointer border-b align-top"
                                                     onClick={() => setOpen(open === o.order_ref ? null : o.order_ref)}
                                                 >
-                                                    <td className="py-2 pr-3 font-mono">{o.order_ref}</td>
+                                                    <td className="py-2 pr-3 font-mono">
+                                                        {o.order_ref}
+                                                        {o.parcel && (
+                                                            <div className="text-muted-foreground font-sans text-xs whitespace-nowrap">
+                                                                {o.parcel.summary}
+                                                                <div>
+                                                                    from {o.parcel.warehouse}, collected {formatMoney(o.parcel.collected)}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </td>
                                                     <td className="py-2 pr-3 tabular-nums">{showDate(o.order_date)}</td>
                                                     <td className="py-2 pr-3">{o.brand ?? '-'}</td>
                                                     <td className="py-2 pr-3">
@@ -466,6 +486,13 @@ export default function ShopOrderImport({
                             )}
                             {!can.approve && (
                                 <p className="text-muted-foreground text-sm">The imported orders wait for approval; approvers get one notice.</p>
+                            )}
+                            {preview.totals.past_parcels > 0 && (
+                                <p className="text-muted-foreground text-sm">
+                                    {preview.totals.past_parcels} past parcel(s) are approved, sent, booked and recorded delivered on their own days
+                                    whatever the box above says, oldest first. One that the stock or the books refuse is left out whole, with the
+                                    reason.
+                                </p>
                             )}
 
                             <div className="flex flex-wrap items-center gap-3">
