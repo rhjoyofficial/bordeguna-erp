@@ -64,7 +64,6 @@ use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\SalesOrder;
-use App\Modules\Sales\Models\SalesOrderAddress;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Models\SalesReturn;
 use App\Modules\Sales\Support\CommissionAgents;
@@ -73,6 +72,7 @@ use App\Modules\Sales\Support\CourierSays;
 use App\Modules\Sales\Support\CourierZoneCharge;
 use App\Modules\Sales\Support\CreditOverrideAuthority;
 use App\Modules\Sales\Support\CustomerAdvanceBook;
+use App\Modules\Sales\Support\CustomerSavedPlaces;
 use App\Modules\Sales\Support\DeliveryBilling;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
@@ -1553,28 +1553,10 @@ class SalesOrderController extends Controller
      */
     private static function withSavedPlaces(Collection $customers): Collection
     {
-        $latest = SalesOrderAddress::query()
-            ->join('sales_orders', 'sales_orders.id', '=', 'sales_order_addresses.sales_order_id')
-            ->whereIn('sales_orders.customer_id', $customers->pluck('id'))
-            ->whereNotNull('sales_order_addresses.district')
-            ->groupBy('sales_orders.customer_id')
-            ->selectRaw('MAX(sales_order_addresses.id) as id')
-            ->pluck('id');
-
-        $places = SalesOrderAddress::query()
-            ->join('sales_orders', 'sales_orders.id', '=', 'sales_order_addresses.sales_order_id')
-            ->whereIn('sales_order_addresses.id', $latest)
-            ->get(['sales_orders.customer_id', 'sales_order_addresses.district', 'sales_order_addresses.thana', 'sales_order_addresses.area', 'sales_order_addresses.address_line', 'sales_order_addresses.landmark'])
-            ->keyBy('customer_id');
+        $places = CustomerSavedPlaces::for($customers->pluck('id'));
 
         return $customers->map(fn (Customer $customer) => $customer->only(['id', 'name', 'phone', 'type', 'credit_limit', 'address']) + [
-            'saved_place' => ($place = $places->get($customer->id)) === null ? null : [
-                'district' => (string) $place->district,
-                'thana' => (string) $place->thana,
-                'area' => (string) ($place->area ?? ''),
-                'address_line' => (string) $place->address_line,
-                'landmark' => (string) ($place->landmark ?? ''),
-            ],
+            'saved_place' => $places->get($customer->id),
         ])->values();
     }
 

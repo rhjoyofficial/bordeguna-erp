@@ -17,6 +17,7 @@ use App\Modules\Sales\Http\Controllers\CustomerAdvanceController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
 use App\Modules\Sales\Http\Controllers\CustomerDocumentController;
 use App\Modules\Sales\Http\Controllers\CustomerImportController;
+use App\Modules\Sales\Http\Controllers\CustomerLookupController;
 use App\Modules\Sales\Http\Controllers\CustomerQuickCreateController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
 use App\Modules\Sales\Http\Controllers\DiscountController;
@@ -149,6 +150,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     // ⭐ D-B (18 Oct 2026): the proprietor's own customer account, from
     // Settings > Company; the controller asks foundation.organization.manage.
     Route::post('owner-customer', [OwnerCustomerController::class, 'store'])->name('owner-customer.store');
+
+    // ⭐ Joy, 26 Oct 2026: a phone or a name typed on a selling screen finds the
+    // customer and fills the form. JSON, read-only. Any selling permission
+    // opens it (the screens ask different ones); the controller checks.
+    Route::get('customers/lookup', CustomerLookupController::class)->name('customers.lookup');
 
     // ⚠ The customer master carries the credit limit and the price group, so
     // editing it is a financial decision rather than an operational one.

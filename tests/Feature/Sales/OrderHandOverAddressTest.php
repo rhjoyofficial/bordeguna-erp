@@ -128,6 +128,13 @@ it('offers the last delivery place of the customer whole, district first, and ne
                     && $rahim['address'] === 'Shop 2, Kawran Bazar';
             }));
 
+    // ⭐ 26 Oct 2026: the customer lookup offers the very same place.
+    $this->actingAs($this->staff)->getJson(route('sales.customers.lookup', ['id' => $this->shop->id]))
+        ->assertOk()
+        ->assertJsonPath('match.saved_place.district', 'Dhaka')
+        ->assertJsonPath('match.saved_place.thana', 'Dhanmondi')
+        ->assertJsonPath('match.saved_place.address_line', 'House 4, Road 2, Jigatola');
+
     // The form takes the street only together with its place, never on its own.
     $form = file_get_contents(resource_path('js/pages/sales/orders/index.tsx'));
     expect($form)->not->toContain("address_line: current.address.address_line || (customer?.address ?? '')")
