@@ -4,6 +4,7 @@ use App\Models\User;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
+use App\Modules\Foundation\Notifications\PendingApprovalNotification;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\AssignSchedule;
 use App\Modules\Hrm\Actions\ProcessAttendance;
@@ -27,8 +28,10 @@ use App\Modules\Hrm\Models\LeaveType;
 use App\Modules\Hrm\Models\Movement;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\Shift;
+use App\Modules\Hrm\Notifications\AttendanceReminderNotification;
 use App\Modules\Hrm\Notifications\EarlyLeaveDecidedNotification;
 use App\Support\ApprovalCards;
+use App\Support\Attention\Sources\AttendanceReviewSource;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia;
@@ -357,4 +360,92 @@ it('shows HR the review link on the Daily grid it points at', function () {
             ->where('filters.review', true)
             ->has('days', 1)
             ->where('days.0.date', '2026-10-12'));
+});
+
+// --- Reminders and Needs attention --------------------------------------------
+
+it('reminds the approvers once, after a request has waited two days', function () {
+    Notification::fake();
+    $movement = requestEarly('2026-10-16', '15:00');
+    Notification::assertSentToTimes($this->manager, PendingApprovalNotification::class, 1);
+
+    $this->travelTo(Carbon::parse('2026-10-16 10:00:00'));
+    $this->artisan('hrm:attendance-reminders')->assertSuccessful();
+    Notification::assertSentToTimes($this->manager, PendingApprovalNotification::class, 1);
+
+    $this->travelTo(Carbon::parse('2026-10-17 10:00:00'));
+    $this->artisan('hrm:attendance-reminders')->assertSuccessful();
+    Notification::assertSentToTimes($this->manager, PendingApprovalNotification::class, 2);
+    Notification::assertSentTo($this->manager, PendingApprovalNotification::class,
+        fn ($n) => str_starts_with($n->summary, 'Reminder, waiting 2 days:') && str_contains($n->summary, 'Early leave'));
+    expect($movement->fresh()->reminded_at)->not->toBeNull();
+
+    $this->travelTo(Carbon::parse('2026-10-18 10:00:00'));
+    $this->artisan('hrm:attendance-reminders')->assertSuccessful();
+    Notification::assertSentToTimes($this->manager, PendingApprovalNotification::class, 2);
+});
+
+it('does not remind about a request already decided', function () {
+    Notification::fake();
+    $movement = requestEarly('2026-10-16', '15:00');
+    earlyAs($this->manager)->post(route('hrm.movements.reject', $movement));
+
+    $this->travelTo(Carbon::parse('2026-10-19 10:00:00'));
+    $this->artisan('hrm:attendance-reminders')->assertSuccessful();
+
+    Notification::assertSentToTimes($this->manager, PendingApprovalNotification::class, 1);
+});
+
+it('sends HR the provisional days on the 20th, three days before the 24-23 cycle ends', function () {
+    Notification::fake();
+    earlyDay('12:30');
+    $hr = User::factory()->create();
+    $hr->businesses()->attach($this->business->id);
+    $hr->assignRole('Owner');
+
+    $this->travelTo(Carbon::parse('2026-10-19 08:30:00'));
+    $this->artisan('hrm:attendance-reminders')->assertSuccessful();
+    Notification::assertNotSentTo($hr, AttendanceReminderNotification::class);
+
+    $this->travelTo(Carbon::parse('2026-10-20 08:30:00'));
+    $this->artisan('hrm:attendance-reminders')->assertSuccessful();
+    Notification::assertSentTo($hr, AttendanceReminderNotification::class, fn ($n) => str_contains($n->summary, '1 attendance day of this payroll cycle is still provisional')
+        && str_contains($n->summary, '12 Oct (Karim Ahmed)')
+        && str_contains($n->summary, 'ends on 23 Oct 2026')
+        && $n->url === '/hrm/attendance/daily?from=2026-10-12&to=2026-10-12&review=1');
+    Notification::assertNotSentTo($this->manager, AttendanceReminderNotification::class);
+});
+
+it('lists waiting early leave and provisional days, with dates, on Needs attention', function () {
+    earlyDay('12:30');
+    requestEarly('2026-10-16', '15:00');
+
+    $source = app(AttendanceReviewSource::class);
+    expect($source->authorize($this->manager))->toBeTrue()
+        ->and($source->authorize($this->staffUser))->toBeFalse();
+
+    $items = collect($source->items($this->manager, $this->business->id))->keyBy(fn ($i) => $i->key);
+
+    $pending = $items['attendance_review:early_leave_pending'];
+    expect($pending->reason)->toBe('1 early leave requests are waiting for a decision: 16 Oct.')
+        ->and($pending->url)->toBe('/hrm/attendance/daily?from=2026-10-16&to=2026-10-16&review=1')
+        ->and($pending->severity)->toBe('normal');
+
+    $provisional = $items['attendance_review:provisional'];
+    expect($provisional->reason)->toContain('12 Oct')
+        ->and($provisional->url)->toBe('/hrm/attendance/daily?from=2026-10-12&to=2026-10-12&review=1');
+
+    $this->travelTo(Carbon::parse('2026-10-20 09:00:00'));
+    $items = collect($source->items($this->manager, $this->business->id))->keyBy(fn ($i) => $i->key);
+    expect($items['attendance_review:provisional']->severity)->toBe('high')
+        ->and($items['attendance_review:early_leave_pending']->severity)->toBe('high');
+});
+
+it('shows the attendance lines on the Needs attention page', function () {
+    earlyDay('12:30');
+
+    earlyAs($this->manager)->get(route('attention'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('items', fn ($items) => collect($items)->contains(fn ($i) => $i['key'] === 'attendance_review:provisional')));
 });

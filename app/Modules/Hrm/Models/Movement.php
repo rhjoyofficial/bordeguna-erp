@@ -41,6 +41,7 @@ class Movement extends Model implements WithdrawsFromApproval
         'reason',
         'requested_by',
         'applied_at',
+        'reminded_at',
         'cancelled_at',
         'cancelled_by',
         'cancel_reason',
@@ -52,6 +53,7 @@ class Movement extends Model implements WithdrawsFromApproval
             'type' => MovementType::class,
             'movement_date' => 'date:Y-m-d',
             'applied_at' => 'datetime',
+            'reminded_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
     }

@@ -11,6 +11,7 @@ use App\Modules\Foundation\Console\Commands\SendMorningBriefing;
 use App\Modules\Hrm\Console\Commands\AccrueEarnedLeave;
 use App\Modules\Hrm\Console\Commands\DisableDueSeparations;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
+use App\Modules\Hrm\Console\Commands\SendAttendanceReminders;
 use App\Modules\Inventory\Actions\ProposeExpiredStockWriteOffs;
 use App\Modules\Purchasing\Console\Commands\RollAndRemindRecurringExpenses;
 use App\Modules\Sales\Couriers\Console\SyncCourierParcelsCommand;
@@ -137,6 +138,16 @@ Schedule::command(RollAndRemindRecurringExpenses::class)
 //
 // ⚠ 08:30 Dhaka with the other digests. It reminds and nothing else.
 Schedule::command(RemindAssetMaintenance::class)
+    ->dailyAt('08:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Attendance reminders (Joy's HRM queue, 27 October 2026): an early leave
+// request waiting two days reminds its approvers once, and three days before
+// the payroll cycle ends (the 20th) HR hears which days are still provisional.
+//
+// ⚠ 08:30 Dhaka with the other digests. It reminds and nothing else.
+Schedule::command(SendAttendanceReminders::class)
     ->dailyAt('08:30')
     ->withoutOverlapping()
     ->runInBackground();
