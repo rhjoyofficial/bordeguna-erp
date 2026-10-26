@@ -103,6 +103,14 @@ class HandleInertiaRequests extends Middleware
             // `campaignPreview` is the FIRST of the three brakes on a module
             // that spends money by itself. Both were built, tested and unseen.
             'contactImportPlan' => fn () => $request->session()->get('contactImportPlan'),
+            // ⚠⚠ Dead engine #10 (26 Oct 2026, found rehearsing the Sangram
+            // customer import): the customer, supplier and credit terms
+            // reviews were flashed and read by their panels, but never shared
+            // here, so "Check the file" showed nothing and Apply was never
+            // offered. Same family, same cure: the key is a prop or it is dead.
+            'customerImportPlan' => fn () => $request->session()->get('customerImportPlan'),
+            'supplierImportPlan' => fn () => $request->session()->get('supplierImportPlan'),
+            'creditTermsPlan' => fn () => $request->session()->get('creditTermsPlan'),
             // Edit, delete and correct, Phase 0 (17 Oct 2026): "Possible
             // duplicate" with its candidates and the ack token for "Save anyway".
             'duplicateWarning' => fn () => $request->session()->get('duplicateWarning'),

@@ -346,3 +346,14 @@ it('refuses to apply a customer import in a different business from the one it w
 
     expect(Customer::withoutGlobalScopes()->where('code', 'CUS-0001')->exists())->toBeFalse();
 });
+
+// ⚠⚠ Dead engine #10 (26 Oct 2026): the plan was flashed and the session test
+// passed, but the page was never handed it. Assert the PROP the panel reads.
+it('hands the review to the customer list page, so the plan and Apply show', function () {
+    ($this->review)(($this->file)("CUS-0001,Rahim Store,retail,,01711000000,,,,,,,,,\n"))->assertRedirect();
+
+    ($this->asOwner)()->get('/sales/customers')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('customerImportPlan.creates.0.code', 'CUS-0001'));
+});
