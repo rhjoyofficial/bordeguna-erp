@@ -7,20 +7,28 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Enums\OrderConfirmation;
 use App\Modules\Sales\Enums\SalesChannel;
+use App\Modules\Sales\Http\Controllers\SalesOrderController;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderImport;
 use App\Modules\Sales\Models\SalesOrderImportOrder;
+use App\Modules\Sales\Models\SalesOrderLine;
+use App\Modules\Sales\Support\DeliveryBilling;
 use App\Modules\Sales\Support\SalesOrderOrigin;
 use App\Modules\Sales\Support\ShopOrderImportPlan;
 use App\Modules\Sales\Support\StagedShopOrderFile;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -39,6 +47,13 @@ use Throwable;
  * holder of `sales.orders.approve`) each is then approved through
  * ApproveSalesOrder, so the credit rules apply exactly as on the screen; one
  * they refuse stays waiting. Approvers get one notice for the whole file.
+ *
+ * ⭐ Past parcels (Joy, 26 Oct 2026): an order with a consignment id is
+ * created, approved, confirmed, sent on its challan, booked with the courier
+ * and recorded Delivered, ALL in its one transaction (sendPastParcel). Any
+ * step that refuses leaves nothing of that order, and the import says why.
+ * They go first, oldest parcel first, so FIFO gives each the batch it really
+ * took and a back-dated challan never needs a batch that came in later.
  */
 class ApplyShopOrderImport
 {
@@ -46,6 +61,10 @@ class ApplyShopOrderImport
         private readonly CreateSalesOrder $create,
         private readonly RecordOrderPayment $payments,
         private readonly ApproveSalesOrder $approve,
+        private readonly RecordDelivery $deliveries,
+        private readonly BookConsignment $consignments,
+        private readonly RecordConsignmentOutcome $outcomes,
+        private readonly ResolveSellingPrice $prices,
     ) {}
 
     /**
@@ -100,9 +119,19 @@ class ApplyShopOrderImport
             $skipped++;
         }
 
-        foreach ($plan->orders as $order) {
+        foreach (self::inApplyOrder($plan->orders) as $order) {
+            $parcel = $order['parcel'] ?? null;
+
             try {
-                $salesOrder = DB::transaction(fn () => $this->createOne($order, $import, $businessId, $by, $moneyAccounts));
+                $salesOrder = DB::transaction(function () use ($order, $parcel, $import, $businessId, $by, $moneyAccounts) {
+                    $salesOrder = $this->createOne($order, $import, $businessId, $by, $moneyAccounts);
+
+                    if ($parcel !== null) {
+                        $this->sendPastParcel($salesOrder, $order, $parcel, $import, $by, $moneyAccounts);
+                    }
+
+                    return $salesOrder;
+                });
             } catch (QueryException $e) {
                 // The unique shop number: somebody imported it in the meantime.
                 $existing = SalesOrder::query()->withoutGlobalScopes()->where('shop_reference', $order['order_ref'])->first();
@@ -118,9 +147,26 @@ class ApplyShopOrderImport
 
                 continue;
             } catch (Throwable $e) {
-                $message = $e instanceof ValidationException ? (string) collect($e->errors())->flatten()->first() : $e->getMessage();
+                $message = match (true) {
+                    $e instanceof ValidationException => (string) collect($e->errors())->flatten()->first(),
+                    // The batch-date refusal, in the challan form's words.
+                    $e instanceof InvalidArgumentException => SalesOrderController::challanDateProblem($e->getMessage()),
+                    default => $e->getMessage(),
+                };
+
+                if ($parcel !== null) {
+                    $message = "Past parcel {$parcel['consignment_id']}: ".rtrim($message, '. ').'. Nothing was written for this order.';
+                }
+
                 $this->record($import, $order['order_ref'], SalesOrderImportOrder::FAILED, Str::limit($message, 480, ''), null, $order);
                 $failed++;
+
+                continue;
+            }
+
+            if ($parcel !== null) {
+                $this->record($import, $order['order_ref'], SalesOrderImportOrder::CREATED, Str::limit(self::parcelSummary($parcel), 480, ''), (int) $salesOrder->id, $order);
+                $created++;
 
                 continue;
             }
@@ -196,6 +242,8 @@ class ApplyShopOrderImport
                     : null,
             ], $order['lines']),
             createdBy: $by,
+            // A past parcel's order holds and sends from the warehouse it left.
+            warehouse: ($order['parcel'] ?? null)['warehouse'] ?? null,
             orderedAt: $order['order_date'],
             note: implode(' ', $notes),
             origin: new SalesOrderOrigin(
@@ -238,6 +286,126 @@ class ApplyShopOrderImport
         }
 
         return $salesOrder;
+    }
+
+    /**
+     * Past parcels first, by the day they left (a stable sort, so one day's
+     * parcels keep the file's order), then every other order as in the file.
+     *
+     * @param  array<string, array<string, mixed>>  $orders
+     * @return list<array<string, mixed>>
+     */
+    public static function inApplyOrder(array $orders): array
+    {
+        $orders = array_values($orders);
+        $parcels = array_values(array_filter($orders, fn (array $o) => ($o['parcel'] ?? null) !== null));
+        $others = array_values(array_filter($orders, fn (array $o) => ($o['parcel'] ?? null) === null));
+
+        // ⚠ usort is stable since PHP 8.0.
+        usort($parcels, fn (array $a, array $b) => strcmp($a['parcel']['sent_on'], $b['parcel']['sent_on']));
+
+        return [...$parcels, ...$others];
+    }
+
+    /**
+     * ⭐ The rest of a past parcel's history, inside the order's transaction:
+     * approved by the person importing (whatever the auto-approve box says),
+     * confirmed, the full order sent on a challan dated the day it left,
+     * booked under the courier's real consignment id for what was still owed,
+     * and Delivered on the day with what was collected (invoice and receipt
+     * into the courier's account, RecordConsignmentOutcome). Every step is the
+     * screen's own action with its own guards; any refusal throws and the
+     * whole order is undone.
+     *
+     * @param  array<string, mixed>  $order
+     * @param  array<string, mixed>  $parcel
+     * @param  array<string, MoneyAccount>  $moneyAccounts
+     */
+    private function sendPastParcel(SalesOrder $salesOrder, array $order, array $parcel, SalesOrderImport $import, User $by, array $moneyAccounts): void
+    {
+        /** @var Money $advance */
+        $advance = $order['advance'];
+
+        // ⚠ The courier collected only what the advance left. With no account
+        // for the advance there is no receipt for it, and the invoice would ask
+        // the courier for the whole order.
+        if ($advance->minor > 0 && ! isset($moneyAccounts[$order['advance_method']])) {
+            throw new RuntimeException("The advance of {$advance->format()} by {$order['advance_method']} has no money account chosen, so it cannot be set against the parcel. Choose the account it went into and import again.");
+        }
+
+        // Plan-time rule, asked again at the moment of writing.
+        if (($refusal = PlanShopOrderImport::pastParcelRefusal($by)) !== null) {
+            throw new RuntimeException($refusal);
+        }
+
+        $this->approve->handle($salesOrder->fresh(), $by);
+        $salesOrder->refresh();
+
+        if (! $salesOrder->isDeliverable()) {
+            throw new RuntimeException("Order {$salesOrder->order_number} needs another approval before it can be sent, so it cannot be imported as a past parcel.");
+        }
+
+        $salesOrder->forceFill([
+            'confirmation_status' => OrderConfirmation::Confirmed,
+            'confirmed_by' => $by->id,
+            'confirmed_at' => Carbon::parse($order['order_date']),
+            'confirmation_note' => "Past parcel, imported from {$import->file_name}.",
+        ])->save();
+
+        /** @var Warehouse $warehouse */
+        $warehouse = $parcel['warehouse'];
+        $courier = $parcel['courier'];
+        $memo = "{$courier->name} consignment {$parcel['consignment_id']}";
+
+        $delivery = $this->deliveries->handle(
+            customer: $salesOrder->customer,
+            warehouse: $warehouse->fresh(),
+            lines: $salesOrder->lines()->with('product')->get()->map(fn (SalesOrderLine $line) => [
+                'product' => $line->product,
+                'quantity' => (string) $line->quantity_ordered,
+                'orderLine' => $line,
+            ])->all(),
+            createdBy: $by,
+            // A bare day: RecordDelivery reads it as the end of that day.
+            deliveredAt: $parcel['sent_on'],
+            note: "Past parcel {$memo}, imported from {$import->file_name}.",
+        );
+
+        // What the ERP itself says the courier should collect: the invoice it
+        // would raise, less the advance. It must be what the sheet says.
+        $due = DeliveryBilling::previewDue($delivery, $this->prices);
+        /** @var Money $collected */
+        $collected = $parcel['collected'];
+
+        if ($due === null || $due->minor !== $collected->minor) {
+            throw new RuntimeException('The ERP works out '.($due?->format() ?? 'no price')." still owed on this parcel, but the sheet says {$collected->format()} was collected.");
+        }
+
+        $consignment = $this->consignments->handle(
+            delivery: $delivery,
+            courier: $courier->fresh(),
+            consignmentNumber: $parcel['consignment_id'],
+            codAmount: $due->toTaka(),
+            createdBy: $by,
+            declaredWeightGrams: $order['weight_grams'],
+        );
+
+        $this->outcomes->handle(
+            consignment: $consignment,
+            outcome: ConsignmentStatus::Delivered,
+            on: $parcel['delivered_on'],
+            collectedAmount: $collected->toTaka(),
+            lines: [],
+            recordedBy: $by,
+            note: "Past parcel, imported from {$import->file_name}.",
+        );
+    }
+
+    /** @param array<string, mixed> $parcel */
+    private static function parcelSummary(array $parcel): string
+    {
+        return "Past parcel {$parcel['courier']->name} {$parcel['consignment_id']}: sent ".Carbon::parse($parcel['sent_on'])->format('d/m/Y')
+            .', delivered '.Carbon::parse($parcel['delivered_on'])->format('d/m/Y').", collected {$parcel['collected']->format()}.";
     }
 
     /**

@@ -163,6 +163,7 @@ it('downloads the template as xlsx and csv with every column in order', function
         'order_ref', 'order_date', 'brand', 'channel', 'customer_name', 'phone', 'alt_phone', 'district', 'thana', 'area',
         'address_line', 'landmark', 'sku', 'quantity', 'unit_price', 'line_discount', 'order_discount', 'delivery_charge',
         'advance_paid', 'advance_method', 'advance_reference', 'payment_method', 'note', 'weight_grams',
+        'warehouse', 'courier', 'consignment_id', 'sent_on', 'delivered_on', 'collected',
     ]);
 });
 

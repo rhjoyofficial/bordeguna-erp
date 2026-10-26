@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Support;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Sales\Models\Customer;
+use Illuminate\Support\Carbon;
 
 /**
  * What a shop order sheet would do, worked out and not yet done.
@@ -78,6 +79,7 @@ final class ShopOrderImportPlan
             'payment_method' => $order['payment_method'],
             'cod' => Money::ofMinor(max(0, $order['total']->minor - $order['advance']->minor))->toTaka(),
             'weight_grams' => $order['weight_grams'],
+            'parcel' => self::parcel($order['parcel'] ?? null),
         ])->values()->all();
 
         return [
@@ -95,7 +97,35 @@ final class ShopOrderImportPlan
                 'goods' => Money::sum(collect($this->orders)->pluck('goods'))->toTaka(),
                 'total' => Money::sum(collect($this->orders)->pluck('total'))->toTaka(),
                 'advance' => Money::sum(collect($this->orders)->pluck('advance'))->toTaka(),
+                'past_parcels' => collect($this->orders)->filter(fn (array $o) => ($o['parcel'] ?? null) !== null)->count(),
             ],
+        ];
+    }
+
+    /**
+     * ⭐ Past parcels (26 Oct 2026): what the preview says about one, in a line:
+     * "past parcel: CarryBee - Bionic F0919..., sent 19/09, delivered 20/09".
+     *
+     * @param  array<string, mixed>|null  $parcel
+     * @return array<string, mixed>|null
+     */
+    private static function parcel(?array $parcel): ?array
+    {
+        if ($parcel === null) {
+            return null;
+        }
+
+        $sent = Carbon::parse($parcel['sent_on']);
+        $delivered = Carbon::parse($parcel['delivered_on']);
+
+        return [
+            'warehouse' => $parcel['warehouse']->name,
+            'courier' => $parcel['courier']->name,
+            'consignment_id' => $parcel['consignment_id'],
+            'sent_on' => $parcel['sent_on'],
+            'delivered_on' => $parcel['delivered_on'],
+            'collected' => $parcel['collected']->toTaka(),
+            'summary' => "past parcel: {$parcel['courier']->name} {$parcel['consignment_id']}, sent {$sent->format('d/m')}, delivered {$delivered->format('d/m')}",
         ];
     }
 }
