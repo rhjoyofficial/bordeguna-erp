@@ -8,10 +8,13 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\AssignSchedule;
 use App\Modules\Hrm\Actions\ProcessAttendance;
 use App\Modules\Hrm\Actions\RecordPunch;
+use App\Modules\Hrm\Actions\RequestLeave;
+use App\Modules\Hrm\Actions\ValidatePayrollRun;
 use App\Modules\Hrm\database\seeders\AttendancePolicySeeder;
 use App\Modules\Hrm\database\seeders\LeaveTypeSeeder;
 use App\Modules\Hrm\database\seeders\LeaveWorkflowSeeder;
 use App\Modules\Hrm\Enums\AttendanceStatus;
+use App\Modules\Hrm\Enums\LeaveDayPortion;
 use App\Modules\Hrm\Enums\MovementType;
 use App\Modules\Hrm\Enums\PunchSource;
 use App\Modules\Hrm\Enums\ScheduleScope;
@@ -20,7 +23,9 @@ use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\HolidayCalendar;
+use App\Modules\Hrm\Models\LeaveType;
 use App\Modules\Hrm\Models\Movement;
+use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\Shift;
 use App\Modules\Hrm\Notifications\EarlyLeaveDecidedNotification;
 use App\Support\ApprovalCards;
@@ -296,4 +301,60 @@ it('shows the approver the early leave on the decision card', function () {
     $card = app(ApprovalCards::class)->present($movement->approvalRequest()->first());
 
     expect($card['summary'])->toContain('Early leave')->toContain('leaving at 12:30');
+});
+
+// --- Payroll: the block names the dates and links to them ---------------------
+
+function payrollRowFor(Employee $employee): ?array
+{
+    $report = app(ValidatePayrollRun::class)->handle(PayrollPeriod::forMonth(2026, 10));
+
+    return collect($report['employees'])->firstWhere('employee_id', $employee->id) + ['report' => $report];
+}
+
+it('names the provisional dates in the payroll issue and links to them on the Daily grid', function () {
+    earlyDay('12:30');
+    app(ProcessAttendance::class)->forDay($this->employee, '2026-10-13');
+
+    $row = payrollRowFor($this->employee);
+
+    expect(implode(' ', $row['issues']))
+        ->toContain('2 days of attendance still await HR review: 12 Oct 2026, 13 Oct 2026.')
+        ->and($row['review_days'])->toHaveCount(2)
+        ->and($row['review_url'])->toBe('/hrm/attendance/daily?from=2026-10-12&to=2026-10-13&review=1&employee_id='.$this->employee->id)
+        ->and($row['report']['review_url'])->toBe('/hrm/attendance/daily?from=2026-10-12&to=2026-10-13&review=1');
+});
+
+it('says when a pending leave or early leave request covers a blocked day', function () {
+    earlyDay('12:30');
+    app(ProcessAttendance::class)->forDay($this->employee, '2026-10-13');
+
+    requestEarly('2026-10-12');
+    app(RequestLeave::class)->handle(
+        $this->employee,
+        LeaveType::where('code', 'casual')->sole(),
+        '2026-10-13', '2026-10-13', LeaveDayPortion::FullDay, 'Fever', $this->staffUser,
+    );
+
+    $row = payrollRowFor($this->employee);
+
+    expect(implode(' ', $row['issues']))
+        ->toContain('12 Oct 2026 (pending early leave request covers this day)')
+        ->toContain('13 Oct 2026 (pending leave covers this day)')
+        ->and($row['review_days'][1]['pending'])->toBe('pending leave covers this day');
+});
+
+it('shows HR the review link on the Daily grid it points at', function () {
+    earlyDay('12:30');
+    $hr = User::factory()->create();
+    $hr->businesses()->attach($this->business->id);
+    $hr->assignRole('Owner');
+
+    earlyAs($hr)->get(ValidatePayrollRun::reviewUrl(['2026-10-12'], $this->employee->id))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('hrm/attendance/daily')
+            ->where('filters.review', true)
+            ->has('days', 1)
+            ->where('days.0.date', '2026-10-12'));
 });

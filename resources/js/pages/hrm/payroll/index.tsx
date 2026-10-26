@@ -19,7 +19,7 @@ import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Lock } from 'lucide-react';
 import { Fragment, useEffect, useState } from 'react';
 
@@ -55,6 +55,9 @@ interface ValidationRow {
     employee: string;
     employee_code: string;
     issues: string[];
+    /** ⭐ 27 Oct 2026: the provisional days blocking this person, and the Daily grid filtered to them. */
+    review_days?: { date: string; pending: string | null }[];
+    review_url?: string | null;
 }
 
 interface WarningRow {
@@ -101,6 +104,7 @@ interface Run {
         issue_count: number;
         checked: number;
         employees: ValidationRow[];
+        review_url?: string | null;
         warning_count?: number;
         warnings?: WarningRow[];
     } | null;
@@ -878,6 +882,8 @@ function AccrualMissing({ run }: { run: Run }) {
 }
 
 function PeopleIssues({ rows, field }: { rows: (ValidationRow | WarningRow)[]; field: 'issues' | 'warnings' }) {
+    const { t } = useTranslation();
+
     return (
         <table className="mt-2 w-full text-xs">
             <tbody>
@@ -893,6 +899,14 @@ function PeopleIssues({ rows, field }: { rows: (ValidationRow | WarningRow)[]; f
                                     <li key={i}>{text}</li>
                                 ))}
                             </ul>
+                            {field === 'issues' && (row as ValidationRow).review_url && (
+                                <Link
+                                    href={(row as ValidationRow).review_url!}
+                                    className="text-primary mt-1 ml-4 inline-block underline underline-offset-2"
+                                >
+                                    {t('early.review_days')}
+                                </Link>
+                            )}
                         </td>
                     </tr>
                 ))}
@@ -903,6 +917,7 @@ function PeopleIssues({ rows, field }: { rows: (ValidationRow | WarningRow)[]; f
 
 export default function PayrollIndex({ year, month, period, run, payslips, periods, first_period, current_cycle }: Props) {
     const [expanded, setExpanded] = useState<number | null>(null);
+    const { t } = useTranslation();
     const label = monthLabel(year, month);
     const monthName = MONTHS[month - 1];
 
@@ -952,9 +967,16 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
 
                 {run && issues > 0 && (
                     <div className={cn(panelClass, 'px-4 py-3')}>
-                        <h3 className="text-destructive text-sm font-medium">
-                            {issues} issue{issues === 1 ? '' : 's'} must be fixed before payroll can run
-                        </h3>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="text-destructive text-sm font-medium">
+                                {issues} issue{issues === 1 ? '' : 's'} must be fixed before payroll can run
+                            </h3>
+                            {run.validation_report?.review_url && (
+                                <Button asChild size="sm" variant="outline">
+                                    <Link href={run.validation_report.review_url}>{t('early.review_all_days')}</Link>
+                                </Button>
+                            )}
+                        </div>
                         {payslips.length > 0 && (
                             <p className="text-muted-foreground mt-0.5 text-xs">
                                 The payslips below are from the last successful calculation and do not reflect these issues.
