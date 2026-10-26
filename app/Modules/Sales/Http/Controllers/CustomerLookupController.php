@@ -41,7 +41,7 @@ class CustomerLookupController extends Controller
 
     private const LIMIT = 8;
 
-    public function __invoke(Request $request): JsonResponse
+    public function show(Request $request): JsonResponse
     {
         abort_unless($request->user()?->canAny(self::PERMISSIONS), 403);
 

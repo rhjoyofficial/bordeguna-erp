@@ -154,7 +154,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     // ⭐ Joy, 26 Oct 2026: a phone or a name typed on a selling screen finds the
     // customer and fills the form. JSON, read-only. Any selling permission
     // opens it (the screens ask different ones); the controller checks.
-    Route::get('customers/lookup', CustomerLookupController::class)->name('customers.lookup');
+    Route::get('customers/lookup', [CustomerLookupController::class, 'show'])->name('customers.lookup');
 
     // ⚠ The customer master carries the credit limit and the price group, so
     // editing it is a financial decision rather than an operational one.
