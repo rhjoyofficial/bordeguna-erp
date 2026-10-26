@@ -55,7 +55,6 @@ return [
     |
     */
 
-
     'dashboard' => [
         'cache_seconds' => (int) env('HRM_DASHBOARD_CACHE_SECONDS', 60),
     ],
@@ -76,5 +75,40 @@ return [
     */
 
     'go_live_date' => env('HRM_GO_LIVE_DATE'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Early leave (Joy's HRM queue, 27 Oct 2026)
+    |--------------------------------------------------------------------------
+    |
+    | An employee asks to leave early on a day; a manager or the owner approves.
+    | Approved means no deduction for that early departure and the day is
+    | finalised. Read through App\Modules\Hrm\Support\EarlyLeaveRules.
+    |
+    | `unapproved_departure` is what an early departure WITHOUT an approved
+    | request does. Joy left it open; option A was recommended and applied:
+    | `half_day_rule`, exactly today's rule (flagged for review, and a half day
+    | when the payable hours fall to the half-day line). It is the only value
+    | the engine knows; anything else is refused rather than silently ignored.
+    |
+    | `monthly_request_cap` limits how many early leave requests one person may
+    | file in a calendar month, counting those still waiting. Empty = no cap,
+    | which is the decision for now.
+    |
+    | `reminder_after_days` is how long a request may wait before its approvers
+    | are reminded (once). `cycle_end_warning_days` is how many days before the
+    | payroll cycle ends HR is sent the list of days still open (3 = the 20th
+    | for the 24-23 cycle).
+    |
+    */
+
+    'early_leave' => [
+        'unapproved_departure' => env('HRM_EARLY_LEAVE_UNAPPROVED_DEPARTURE', 'half_day_rule'),
+        'monthly_request_cap' => env('HRM_EARLY_LEAVE_MONTHLY_CAP') === null || env('HRM_EARLY_LEAVE_MONTHLY_CAP') === ''
+            ? null
+            : (int) env('HRM_EARLY_LEAVE_MONTHLY_CAP'),
+        'reminder_after_days' => (int) env('HRM_EARLY_LEAVE_REMINDER_AFTER_DAYS', 2),
+        'cycle_end_warning_days' => (int) env('HRM_ATTENDANCE_CYCLE_END_WARNING_DAYS', 3),
+    ],
 
 ];

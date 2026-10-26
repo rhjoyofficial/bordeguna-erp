@@ -7,6 +7,7 @@ use App\Modules\Hrm\Attendance\Data\PunchRecord;
 use App\Modules\Hrm\Attendance\Data\ShiftSpec;
 use App\Modules\Hrm\Attendance\Policy\PolicyConfig;
 use App\Modules\Hrm\Enums\CorrectionType;
+use App\Modules\Hrm\Enums\MovementType;
 use App\Modules\Hrm\Enums\PunchSource;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\AttendancePolicy;
@@ -62,7 +63,32 @@ class DayContextBuilder
             hasApprovedLeave: $this->hasApprovedLeave($employee, $date),
             hasApprovedMovement: $this->hasApprovedMovement($employee, $date, holidayWork: false),
             hasApprovedHolidayWork: $this->hasApprovedMovement($employee, $date, holidayWork: true),
+            approvedEarlyLeaveAt: $this->approvedEarlyLeaveAt($employee, $date),
         );
+    }
+
+    /**
+     * The earliest leaving time an applied early leave allows on this date
+     * (POL-04), or null. A request without a time excuses nothing, because
+     * "left early" with no hour cannot be compared with the punch.
+     */
+    private function approvedEarlyLeaveAt(Employee $employee, Carbon $date): ?Carbon
+    {
+        $times = Movement::where('employee_id', $employee->id)
+            ->applied()
+            ->onDate($date)
+            ->where('type', MovementType::EarlyLeave)
+            ->whereNotNull('from_time')
+            ->pluck('from_time');
+
+        if ($times->isEmpty()) {
+            return null;
+        }
+
+        return $times
+            ->map(fn ($time) => $date->copy()->setTimeFromTimeString((string) $time))
+            ->sortBy(fn (Carbon $at) => $at->getTimestamp())
+            ->first();
     }
 
     /**

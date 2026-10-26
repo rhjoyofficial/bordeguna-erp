@@ -6,14 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\RecordPunch;
 use App\Modules\Hrm\Actions\RequestCorrection;
+use App\Modules\Hrm\Actions\RequestMovement;
 use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Enums\CorrectionType;
+use App\Modules\Hrm\Enums\MovementType;
 use App\Modules\Hrm\Enums\PunchDirection;
 use App\Modules\Hrm\Enums\PunchSource;
 use App\Modules\Hrm\Models\AttendancePeriodLock;
 use App\Modules\Hrm\Models\AttendancePunch;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\Movement;
+use App\Modules\Hrm\Support\AttendanceFollowUp;
 use App\Modules\Hrm\Support\AttendanceSummariser;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,7 +49,7 @@ use Inertia\Response;
  */
 class AttendanceClockController extends Controller
 {
-    public function show(Request $request, AttendanceSummariser $summariser): Response|RedirectResponse
+    public function show(Request $request, AttendanceSummariser $summariser, AttendanceFollowUp $followUp): Response|RedirectResponse
     {
         $employee = Employee::forUser($request->user());
 
@@ -142,7 +146,69 @@ class AttendanceClockController extends Controller
                 ]),
             'directions' => collect(PunchDirection::cases())
                 ->map(fn (PunchDirection $d) => ['value' => $d->value, 'label' => $d->label()]),
+            // ⭐ Joy's HRM queue (27 Oct 2026): provisional days of the current
+            // payroll cycle with nothing filed over them, so the employee sees
+            // what to do before the day blocks everybody's payroll.
+            'days_needing_action' => $followUp->daysNeedingAction($employee, $today),
+            'early_leave_requests' => Movement::with('approvalRequest')
+                ->where('employee_id', $employee->id)
+                ->where('type', MovementType::EarlyLeave)
+                ->orderByDesc('movement_date')->orderByDesc('id')
+                ->limit(10)->get()
+                ->map(fn (Movement $m) => [
+                    'id' => $m->id,
+                    'date' => Carbon::parse($m->movement_date)->toDateString(),
+                    'time' => $m->from_time ? substr((string) $m->from_time, 0, 5) : null,
+                    'reason' => $m->reason,
+                    'status' => $m->isCancelled() ? 'cancelled' : ($m->approvalRequest?->status->value ?? 'pending'),
+                ]),
         ]);
+    }
+
+    /**
+     * ⭐ Early leave request (Joy's HRM queue, 27 Oct 2026): the employee asks
+     * to leave early on a day, from My attendance.
+     *
+     * Self-scope like everything on this screen: the employee is resolved from
+     * the signed-in user, so a request can only ever be for their own day; an
+     * `employee_id` in the body is ignored. It is a movement of type early
+     * leave, so it rides the existing approval chain (Manager or Owner), the
+     * inbox card, withdraw and cancel.
+     */
+    public function requestEarlyLeave(Request $request, RequestMovement $action): RedirectResponse
+    {
+        $employee = Employee::forUser($request->user());
+
+        if ($employee === null) {
+            return redirect()->route('dashboard')
+                ->with('error', 'Your user account is not linked to an employee record yet.');
+        }
+
+        if (! $employee->isEmployedIn(app(BusinessContext::class)->id())) {
+            return back()->with('error', Employee::notEmployedHere());
+        }
+
+        // A day of the current payroll cycle (or a little ahead): a closed
+        // cycle is settled through HR, not by a late request.
+        [$cycleStart] = AttendanceFollowUp::currentWindow();
+
+        $validated = $request->validate([
+            'date' => ['required', 'date', 'after_or_equal:'.$cycleStart->toDateString(), 'before_or_equal:'.Carbon::today()->addDays(31)->toDateString()],
+            'time' => ['required', 'date_format:H:i'],
+            'reason' => ['required', 'string', 'max:1000'],
+        ], [
+            'date.after_or_equal' => 'Only a day of the current payroll cycle can be asked for here. Ask HR about an earlier day.',
+        ]);
+
+        $action->handle(
+            $employee,
+            MovementType::EarlyLeave,
+            Carbon::parse($validated['date'])->toDateString(),
+            ['from_time' => $validated['time'], 'reason' => $validated['reason']],
+            $request->user(),
+        );
+
+        return back()->with('success', 'Early leave requested. Your manager will review it.');
     }
 
     /**

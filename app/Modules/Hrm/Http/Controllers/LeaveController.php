@@ -25,6 +25,7 @@ use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Models\LeaveType;
 use App\Modules\Hrm\Models\LeaveYearEndRun;
 use App\Modules\Hrm\Models\Movement;
+use App\Modules\Hrm\Notifications\EarlyLeaveDecidedNotification;
 use App\Modules\Hrm\Support\LeaveBalance;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -282,9 +283,35 @@ class LeaveController extends Controller
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
 
-        $apply->handle($movement);
+        $apply->handle($movement, $request->user()->id);
+        $this->tellEarlyLeaveDecision($movement, approved: true, note: $note);
 
-        return back()->with('success', 'Movement approved and the day reprocessed.');
+        return back()->with('success', $movement->type->isEarlyLeave()
+            ? 'Early leave approved. The early departure carries no deduction and the day was judged again.'
+            : 'Movement approved and the day reprocessed.');
+    }
+
+    /**
+     * ⭐ Early leave (27 Oct 2026): the employee hears the decision either way.
+     * Other movement types are unchanged.
+     */
+    private function tellEarlyLeaveDecision(Movement $movement, bool $approved, ?string $note): void
+    {
+        $user = $movement->employee?->user;
+
+        if (! $movement->type->isEarlyLeave() || $user === null) {
+            return;
+        }
+
+        $user->notify(new EarlyLeaveDecidedNotification(
+            sprintf(
+                'Your early leave request for %s was %s.%s',
+                Carbon::parse($movement->movement_date)->format('j M Y'),
+                $approved ? 'approved: no deduction for leaving early that day' : 'rejected: the day stays as the attendance rules judge it',
+                filled($note) ? ' Note: '.$note : '',
+            ),
+            route('hrm.clock'),
+        ));
     }
 
     public function rejectMovement(Request $request, Movement $movement): RedirectResponse
@@ -295,8 +322,9 @@ class LeaveController extends Controller
 
         $note = $request->validate(['note' => ['nullable', 'string', 'max:500']])['note'] ?? null;
         $approval->reject($request->user(), $note);
+        $this->tellEarlyLeaveDecision($movement, approved: false, note: $note);
 
-        return back()->with('success', 'Movement rejected.');
+        return back()->with('success', $movement->type->isEarlyLeave() ? 'Early leave rejected.' : 'Movement rejected.');
     }
 
     /**

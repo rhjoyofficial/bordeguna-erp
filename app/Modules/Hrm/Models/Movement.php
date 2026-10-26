@@ -103,9 +103,12 @@ class Movement extends Model implements WithdrawsFromApproval
 
     public function summaryLine(): string
     {
-        $window = $this->from_time && $this->to_time
-            ? sprintf(' %s–%s', substr((string) $this->from_time, 0, 5), substr((string) $this->to_time, 0, 5))
-            : '';
+        $window = match (true) {
+            // Early leave carries one time: when the person goes.
+            $this->type?->isEarlyLeave() && $this->from_time !== null => ' leaving at '.substr((string) $this->from_time, 0, 5),
+            $this->from_time && $this->to_time => sprintf(' %s–%s', substr((string) $this->from_time, 0, 5), substr((string) $this->to_time, 0, 5)),
+            default => '',
+        };
 
         return sprintf(
             '%s — %s on %s%s%s',

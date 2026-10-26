@@ -22,6 +22,9 @@ use App\Modules\Hrm\Enums\BreakPolicy;
  */
 class ApplyGraceAndThresholds implements AttendanceStage
 {
+    /** The flag a day carries when an approved early leave excused its end. */
+    public const APPROVED_EARLY_LEAVE = 'early_leave_approved';
+
     public function handle(AttendanceComputation $computation): AttendanceComputation
     {
         $context = $computation->context;
@@ -107,9 +110,31 @@ class ApplyGraceAndThresholds implements AttendanceStage
             ));
         }
 
-        // POL-04: an approved early departure carries no deduction. Approval
-        // arrives with movements in Phase 2c, so for now it is flagged for a
-        // human rather than silently penalised.
+        // ⭐ POL-04, 27 Oct 2026: an approved early departure carries no
+        // deduction. The approval covers leaving at its time or later (inside
+        // the same grace); leaving well before it is an ordinary early
+        // departure, judged below as if nothing had been approved.
+        $approvedAt = $computation->context->approvedEarlyLeaveAt;
+
+        if ($approvedAt !== null && $lastOut->gte($approvedAt->copy()->subMinutes($grace))) {
+            return $computation
+                ->flag(self::APPROVED_EARLY_LEAVE)
+                ->note(sprintf(
+                    'Left %s under an approved early leave from %s, so the early departure carries no deduction (POL-04).',
+                    $lastOut->format('H:i:s'),
+                    $approvedAt->format('H:i'),
+                ));
+        }
+
+        if ($approvedAt !== null) {
+            $computation = $computation->note(sprintf(
+                'Early leave was approved from %s, but the last punch is earlier, so the departure is judged as unapproved.',
+                $approvedAt->format('H:i'),
+            ));
+        }
+
+        // Without an approval the day goes to a human, and the half-day rule
+        // below still applies (EarlyLeaveRules::UNAPPROVED_HALF_DAY_RULE).
         return $computation
             ->flag('early_departure')
             ->flag('needs_review')
@@ -131,7 +156,12 @@ class ApplyGraceAndThresholds implements AttendanceStage
         $policy = $computation->context->policy;
         $hours = $computation->payableMinutes / 60;
 
-        if ($hours <= $policy->halfDayMaximumHours) {
+        // ⭐ 27 Oct 2026: the shorter day was approved, so the hours lines do
+        // not turn it into a half day or a short day. A late ARRIVAL past the
+        // cutoff is a different fact and is still judged below.
+        $approvedShortDay = in_array(self::APPROVED_EARLY_LEAVE, $computation->flags, true);
+
+        if (! $approvedShortDay && $hours <= $policy->halfDayMaximumHours) {
             return $computation
                 ->with(['status' => AttendanceStatus::HalfDay])
                 ->note(sprintf(
@@ -149,6 +179,10 @@ class ApplyGraceAndThresholds implements AttendanceStage
                     'Arrived more than %d minutes late, which the policy treats as a half day.',
                     $policy->halfDayArrivalAfterMinutes,
                 ));
+        }
+
+        if ($approvedShortDay) {
+            return $computation;
         }
 
         $minimum = $this->fullDayMinimumHours($computation);
