@@ -2,6 +2,7 @@ import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
 import { AgentPicker, type CommissionAgentOption } from '@/components/sales/agent-picker';
 import { CreditOverridePanel, NO_OVERRIDE, type CreditAuthoriser, type CreditOverrideFields } from '@/components/sales/credit-override';
+import { CustomerLookup } from '@/components/sales/customer-lookup';
 import { LineDiscount } from '@/components/sales/line-discount';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -186,27 +187,41 @@ export default function InvoiceCreate({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="New invoice" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="grid max-w-sm gap-2">
-                    <Label required>Customer</Label>
-                    <SearchableSelect
-                        value={data.customer_id}
-                        onChange={pickCustomer}
-                        options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
-                        placeholder="Select customer"
-                        searchPlaceholder="Search customers…"
-                        onCreate={(typed) => {
+                {/* ⭐ 26 Oct 2026 (Joy): a phone or a name finds the customer. Picking
+                    reloads the screen with their challans, as the list does. */}
+                <div className="flex flex-wrap items-start gap-3">
+                    <CustomerLookup
+                        id="invoice-customer-lookup"
+                        selectedId={data.customer_id}
+                        onPick={(customer) => pickCustomer(String(customer.id))}
+                        onUndo={pickCustomer}
+                        onNew={(typed) => {
                             setTypedCustomer(typed);
                             setAddingCustomer(true);
                         }}
-                        createLabel="New customer"
                     />
-                    <CustomerQuickCreate
-                        open={addingCustomer}
-                        onOpenChange={setAddingCustomer}
-                        initialName={typedCustomer}
-                        onCreated={(row) => pickCustomer(String(row.id))}
-                    />
-                    <InputError message={errors.customer_id} />
+                    <div className="grid w-full max-w-sm gap-2">
+                        <Label required>Customer</Label>
+                        <SearchableSelect
+                            value={data.customer_id}
+                            onChange={pickCustomer}
+                            options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
+                            placeholder="Select customer"
+                            searchPlaceholder="Search customers…"
+                            onCreate={(typed) => {
+                                setTypedCustomer(typed);
+                                setAddingCustomer(true);
+                            }}
+                            createLabel="New customer"
+                        />
+                        <CustomerQuickCreate
+                            open={addingCustomer}
+                            onOpenChange={setAddingCustomer}
+                            initialName={typedCustomer}
+                            onCreated={(row) => pickCustomer(String(row.id))}
+                        />
+                        <InputError message={errors.customer_id} />
+                    </div>
                 </div>
 
                 {customerId !== null && billable.length === 0 && (

@@ -49,8 +49,11 @@ export function CustomerQuickCreate({
 
     useEffect(() => {
         if (open) {
-            setName(initialName);
-            setPhone('');
+            // ⭐ 26 Oct 2026: what was typed is a phone (digits with + - or
+            // spaces) or a name, and lands in its own box, as on the order's dialog.
+            const typedPhone = /\d/.test(initialName) && /^[+\d\s-]+$/.test(initialName);
+            setName(typedPhone ? '' : initialName);
+            setPhone(typedPhone ? initialName : '');
             setType('retail');
             setErrors({});
         }
@@ -77,7 +80,8 @@ export function CustomerQuickCreate({
 
             if (!response.ok) {
                 setErrors({
-                    name: response.status === 403 ? 'You are not allowed to add customers. Ask the Owner or a Manager.' : 'Could not save. Try again.',
+                    name:
+                        response.status === 403 ? 'You are not allowed to add customers. Ask the Owner or a Manager.' : 'Could not save. Try again.',
                 });
 
                 return;

@@ -1,6 +1,7 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
+import { CustomerLookup } from '@/components/sales/customer-lookup';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -238,6 +239,19 @@ function QuotePopup({ customers, leads, products, quote }: Pick<QuotationsProps,
                             )}
                             <InputError message={form.errors.customer_id ?? form.errors.lead_id} />
                         </div>
+                        {/* ⭐ 26 Oct 2026 (Joy): a phone or a name finds the customer. */}
+                        {form.data.party_kind === 'customer' && (
+                            <CustomerLookup
+                                id={quote ? `quote-${quote.id}-customer-lookup` : 'quote-customer-lookup'}
+                                selectedId={form.data.customer_id}
+                                onPick={(customer) => form.setData('customer_id', String(customer.id))}
+                                onUndo={(previousId) => form.setData('customer_id', previousId)}
+                                onNew={(typed) => {
+                                    setTypedCustomer(typed);
+                                    setAddingCustomer(true);
+                                }}
+                            />
+                        )}
                     </div>
 
                     <div className="space-y-2">

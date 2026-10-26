@@ -1,5 +1,6 @@
 import InputError from '@/components/input-error';
 import { AmountBox, DateBox, Field } from '@/components/sales/advance-dialogs';
+import { CustomerLookup } from '@/components/sales/customer-lookup';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -8,7 +9,7 @@ import { dmy } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type FormDataConvertible } from '@inertiajs/core';
 import { router } from '@inertiajs/react';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
 type Named = { id: number; name: string; phone?: string | null };
 
@@ -155,6 +156,8 @@ export function GiveSampleDialog({
     };
     const [data, setData] = useState(empty);
     const [zoneNote, setZoneNote] = useState<string | null>(null);
+    // ⭐ 26 Oct 2026: who the sample was going to before the lookup picked a customer.
+    const beforeLookup = useRef<Pick<typeof empty, 'recipient_kind' | 'delivery_district'> | null>(null);
     const set =
         <K extends keyof typeof empty>(key: K) =>
         (value: (typeof empty)[K]) =>
@@ -270,6 +273,30 @@ export function GiveSampleDialog({
                         )}
                     </div>
                     {data.recipient_kind === 'new' && <p className="text-muted-foreground text-xs">{t('smp.new_hint')}</p>}
+                    {/* ⭐ 26 Oct 2026 (Joy): a phone or a name finds the customer, also
+                        when it was about to be typed in as somebody new. */}
+                    {(data.recipient_kind === 'customer' || data.recipient_kind === 'new') && (
+                        <CustomerLookup
+                            id="sample-customer-lookup"
+                            selectedId={data.recipient_kind === 'customer' ? data.recipient_id : ''}
+                            onPick={(customer) => {
+                                beforeLookup.current = { recipient_kind: data.recipient_kind, delivery_district: data.delivery_district };
+                                setData((current) => ({
+                                    ...current,
+                                    recipient_kind: 'customer',
+                                    recipient_id: String(customer.id),
+                                    delivery_district: current.delivery_district || (customer.saved_place?.district ?? ''),
+                                }));
+                            }}
+                            onUndo={(previousId) =>
+                                setData((current) => ({
+                                    ...current,
+                                    ...(beforeLookup.current ?? {}),
+                                    recipient_id: previousId,
+                                }))
+                            }
+                        />
+                    )}
 
                     <div className="flex flex-wrap items-end gap-3">
                         <Field id="sample-purpose" label={t('smp.purpose')} required>

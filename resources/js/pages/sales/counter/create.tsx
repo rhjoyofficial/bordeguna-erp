@@ -2,6 +2,7 @@ import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
 import { AgentPicker, type CommissionAgentOption } from '@/components/sales/agent-picker';
 import { CreditOverridePanel, NO_OVERRIDE, type CreditAuthoriser } from '@/components/sales/credit-override';
+import { CustomerLookup } from '@/components/sales/customer-lookup';
 import { LineDiscount } from '@/components/sales/line-discount';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
@@ -888,6 +889,23 @@ export default function CounterSale({
                             <p className="text-muted-foreground text-xs">{t('pospay.sold_today', { date: showDate(today) })}</p>
                         )}
 
+                        {/* ⭐ 26 Oct 2026 (Joy): the number a regular gives at the
+                            counter picks them and their prices; Undo goes back to
+                            whoever was on the sale (the walk-in). */}
+                        <CustomerLookup
+                            id="counter-customer-lookup"
+                            selectedId={data.customer_id}
+                            onPick={(customer) => changeCustomer(String(customer.id))}
+                            onUndo={(previousId) => changeCustomer(previousId || (walkInId ? String(walkInId) : ''))}
+                            onNew={
+                                canAddCustomer
+                                    ? (typed) => {
+                                          setTypedCustomer(typed);
+                                          setAddingCustomer(true);
+                                      }
+                                    : undefined
+                            }
+                        />
                         <div className="grid grid-cols-2 gap-2">
                             <div className="grid gap-1">
                                 <Label htmlFor="customer" className="text-xs" required>

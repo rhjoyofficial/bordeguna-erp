@@ -5,6 +5,7 @@ import InputError from '@/components/input-error';
 import { AgentPicker, type CommissionAgentOption } from '@/components/sales/agent-picker';
 import { BrandBadge, type BrandOption } from '@/components/sales/brand';
 import { CreditOverridePanel, NO_OVERRIDE, type CreditAuthoriser, type CreditOverrideFields } from '@/components/sales/credit-override';
+import { CustomerLookup } from '@/components/sales/customer-lookup';
 import { LineDiscount } from '@/components/sales/line-discount';
 import { OrderStageBadge } from '@/components/sales/order-channel-panel';
 import { Chip, CourierSaysCell, type CourierWord } from '@/components/sales/sales-ui';
@@ -26,7 +27,7 @@ import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { PackageCheck } from 'lucide-react';
-import { FormEventHandler, useEffect, useState } from 'react';
+import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
 interface Option {
     id: number;
@@ -951,6 +952,9 @@ function CreateOrderForm({
             };
         });
     };
+    // ⭐ 26 Oct 2026: a phone typed in the lookup picks the customer and fills
+    // the recipient; Undo puts back the customer AND the place from before.
+    const beforeLookup = useRef<AddressDraft | null>(null);
     const pickedCustomer = customers.find((c) => String(c.id) === data.customer_id);
     const savedAddressHint =
         !data.hand_over && pickedCustomer?.address && !pickedCustomer.saved_place && !data.address.district && !data.address.address_line.trim()
@@ -1138,6 +1142,30 @@ function CreateOrderForm({
                                 {!options.may_backdate && !editing && <p className="text-muted-foreground text-xs">{t('och.staff_today')}</p>}
                                 <InputError message={errors.ordered_at} />
                             </div>
+                            <CustomerLookup
+                                id="order-customer-lookup"
+                                selectedId={data.customer_id}
+                                disabled={partlyDelivered}
+                                onPick={(customer) => {
+                                    beforeLookup.current = data.address;
+                                    pickCustomer(String(customer.id));
+                                }}
+                                onUndo={(previousId) =>
+                                    setData((current) => ({
+                                        ...current,
+                                        customer_id: previousId,
+                                        address: beforeLookup.current ?? current.address,
+                                    }))
+                                }
+                                onNew={
+                                    canAddCustomer
+                                        ? (typed) => {
+                                              setTypedCustomer(typed);
+                                              setQuickOpen(true);
+                                          }
+                                        : undefined
+                                }
+                            />
                             <div className="grid w-full min-w-0 gap-2 sm:w-auto sm:max-w-md sm:flex-[1_1_18rem]">
                                 <Label required>{t('orders.form_customer')}</Label>
                                 <SearchableSelect
