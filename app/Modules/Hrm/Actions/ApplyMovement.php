@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Actions;
 
+use App\Models\User;
 use App\Modules\Hrm\Models\Movement;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +22,10 @@ class ApplyMovement
         private readonly FinalizeAttendance $finalize,
     ) {}
 
-    public function handle(Movement $movement, ?int $approverId = null): Movement
+    public function handle(Movement $movement, User|int|null $approver = null): Movement
     {
+        $approverId = $approver instanceof User ? (int) $approver->id : $approver;
+
         return DB::transaction(function () use ($movement, $approverId) {
             if (! $movement->isApplied()) {
                 $movement->update(['applied_at' => now()]);
