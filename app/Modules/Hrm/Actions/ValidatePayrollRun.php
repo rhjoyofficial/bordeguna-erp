@@ -9,7 +9,9 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\SalaryStructure;
+use App\Modules\Hrm\Support\AttendanceFollowUp;
 use App\Modules\Hrm\Support\ScheduleResolver;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -49,6 +51,14 @@ class ValidatePayrollRun
     public function __construct(private readonly ScheduleResolver $resolver) {}
 
     /**
+     * The provisional dates each blocked employee carries, gathered while the
+     * issues are and reset per handle() (never left set across calls).
+     *
+     * @var array<int, list<array{date: string, pending: string|null}>>
+     */
+    private array $reviewDays = [];
+
+    /**
      * @return array{issue_count: int, warning_count: int, employees: array<int, array<string, mixed>>, warnings: array<int, array<string, mixed>>, checked: int}
      */
     public function handle(PayrollPeriod $period): array
@@ -58,17 +68,26 @@ class ValidatePayrollRun
         $warningRows = [];
         $issueCount = 0;
         $warningCount = 0;
+        $this->reviewDays = [];
 
         foreach ($employees as $employee) {
             $issues = $this->issuesFor($employee, $period);
 
             if ($issues !== []) {
                 $issueCount += count($issues);
+                $review = $this->reviewDays[$employee->id] ?? [];
                 $rows[] = [
                     'employee_id' => $employee->id,
                     'employee' => $employee->fullName(),
                     'employee_code' => $employee->employee_code,
                     'issues' => $issues,
+                    // ⭐ 27 Oct 2026: the blocked days, and the Daily grid
+                    // filtered to exactly this person and those dates.
+                    'review_days' => $review,
+                    'review_url' => $review === [] ? null : self::reviewUrl(
+                        array_column($review, 'date'),
+                        $employee->id,
+                    ),
                 ];
             }
 
@@ -85,13 +104,35 @@ class ValidatePayrollRun
             }
         }
 
+        $allDates = collect($this->reviewDays)->flatten(1)->pluck('date')->all();
+
         return [
             'issue_count' => $issueCount,
             'warning_count' => $warningCount,
             'checked' => $employees->count(),
             'employees' => $rows,
             'warnings' => $warningRows,
+            // Every provisional day in the run at once: the Daily grid's review
+            // filter over the span from the first blocked date to the last.
+            'review_url' => $allDates === [] ? null : self::reviewUrl($allDates),
         ];
+    }
+
+    /**
+     * HRM > Attendance > Daily with the review filter, over the dates given.
+     *
+     * @param  list<string>  $dates
+     */
+    public static function reviewUrl(array $dates, ?int $employeeId = null): string
+    {
+        sort($dates);
+
+        return route('hrm.attendance.daily.index', array_filter([
+            'from' => $dates[0],
+            'to' => $dates[count($dates) - 1],
+            'review' => 1,
+            'employee_id' => $employeeId,
+        ]), false);
     }
 
     /**
@@ -320,20 +361,46 @@ class ValidatePayrollRun
             );
         }
 
-        $provisional = DailyAttendance::where('employee_id', $employee->id)
+        $provisionalDates = DailyAttendance::where('employee_id', $employee->id)
             ->whereDate('attendance_date', '>=', $from)
             ->whereDate('attendance_date', '<=', $to)
             ->where('is_provisional', true)
-            ->count();
+            ->orderBy('attendance_date')
+            ->pluck('attendance_date')
+            ->map(fn ($date) => Carbon::parse($date)->toDateString())
+            ->values();
+        $provisional = $provisionalDates->count();
 
         if ($provisional > 0) {
             // POL-06: a provisional status is the system's proposal, not a
             // payroll-eligible fact. Paying on one would skip the human review.
+            //
+            // ⭐ Joy's HRM queue (27 Oct 2026): the issue names the dates, and
+            // says when a request still waiting covers one ("pending leave
+            // covers this day"), so HR knows to decide that request rather
+            // than finalise the day. The dates also travel as data for the
+            // "Review these days" button (see handle()).
+            $hints = app(AttendanceFollowUp::class)->pendingHints(
+                Carbon::parse($provisionalDates->first()),
+                Carbon::parse($provisionalDates->last()),
+                [$employee->id],
+            )[$employee->id] ?? [];
+
+            $this->reviewDays[$employee->id] = $provisionalDates
+                ->map(fn (string $date) => [
+                    'date' => $date,
+                    'pending' => isset($hints[$date]) ? AttendanceFollowUp::hintText($hints[$date]) : null,
+                ])
+                ->all();
+
             $issues[] = sprintf(
-                '%d day%s of attendance still %s HR review.',
+                '%d day%s of attendance still %s HR review: %s.',
                 $provisional,
                 $provisional === 1 ? '' : 's',
                 $provisional === 1 ? 'awaits' : 'await',
+                collect($this->reviewDays[$employee->id])
+                    ->map(fn (array $day) => Carbon::parse($day['date'])->format('j M Y').($day['pending'] ? " ({$day['pending']})" : ''))
+                    ->implode(', '),
             );
         }
 

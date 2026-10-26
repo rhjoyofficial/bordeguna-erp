@@ -134,6 +134,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::get('clock', [AttendanceClockController::class, 'show'])->name('clock');
     Route::post('clock', [AttendanceClockController::class, 'store'])->name('clock.store');
     Route::post('clock/corrections', [AttendanceClockController::class, 'requestCorrection'])->name('clock.corrections.store');
+    // ⭐ Early leave (27 Oct 2026): asked from My attendance, approved like a movement.
+    Route::post('clock/early-leave', [AttendanceClockController::class, 'requestEarlyLeave'])->name('clock.early-leave.store');
 
     // Attendance capture (ATT-01/03/08). The punch log has no edit or delete
     // route by design — raw punches are immutable.

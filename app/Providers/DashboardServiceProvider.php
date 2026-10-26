@@ -89,6 +89,8 @@ class DashboardServiceProvider extends ServiceProvider
         // Round 3 (16 Oct 2026): the classic dashboard's "no selling price" banner, as one row.
         Sources\UnpricedSellableSource::class,
         Sources\ApprovalsWaitingSource::class,
+        // Joy's HRM queue (27 Oct 2026): early leave waiting, provisional days of the cycle.
+        Sources\AttendanceReviewSource::class,
         Sources\StockSource::class,
         Sources\FailedJobsSource::class,
     ];

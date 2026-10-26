@@ -9,6 +9,7 @@ use App\Modules\Hrm\Console\Commands\AuditStaffPurchase2140;
 use App\Modules\Hrm\Console\Commands\DisableDueSeparations;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
 use App\Modules\Hrm\Console\Commands\RunLeaveYearEnd;
+use App\Modules\Hrm\Console\Commands\SendAttendanceReminders;
 use App\Modules\Hrm\Console\Commands\SetLatenessFreeDays;
 use App\Modules\Hrm\Corrections\EmployeeActionPolicy;
 use App\Modules\Hrm\Corrections\ExpenseClaimActionPolicy;
@@ -155,7 +156,7 @@ class HrmServiceProvider extends ServiceProvider
         }
 
         if ($this->app->runningInConsole()) {
-            $this->commands([RunLeaveYearEnd::class, ProcessAttendanceDaily::class, AccrueEarnedLeave::class, DisableDueSeparations::class, SetLatenessFreeDays::class, AuditStaffPurchase2140::class]);
+            $this->commands([RunLeaveYearEnd::class, ProcessAttendanceDaily::class, AccrueEarnedLeave::class, DisableDueSeparations::class, SetLatenessFreeDays::class, AuditStaffPurchase2140::class, SendAttendanceReminders::class]);
         }
 
         // ⭐ Corrections wave 2, B8 (24 Oct 2026, FINAL-PLAN 3.4): expense claim

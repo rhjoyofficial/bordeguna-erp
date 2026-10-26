@@ -37,6 +37,9 @@ final readonly class DayContext
         public bool $hasApprovedLeave = false,
         public bool $hasApprovedMovement = false,
         public bool $hasApprovedHolidayWork = false,
+        // ⭐ 27 Oct 2026: the time an APPROVED early leave lets the person go
+        // (POL-04). Null when no early leave was approved for this day.
+        public ?Carbon $approvedEarlyLeaveAt = null,
     ) {}
 
     public function hasPunches(): bool

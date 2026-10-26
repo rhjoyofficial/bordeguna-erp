@@ -2,7 +2,9 @@
 
 namespace App\Modules\Hrm\Actions;
 
+use App\Models\User;
 use App\Modules\Hrm\Models\Movement;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -15,19 +17,47 @@ use Illuminate\Support\Facades\DB;
  */
 class ApplyMovement
 {
-    public function __construct(private readonly ProcessAttendance $process) {}
+    public function __construct(
+        private readonly ProcessAttendance $process,
+        private readonly FinalizeAttendance $finalize,
+    ) {}
 
-    public function handle(Movement $movement): Movement
+    public function handle(Movement $movement, User|int|null $approver = null): Movement
     {
-        return DB::transaction(function () use ($movement) {
+        $approverId = $approver instanceof User ? (int) $approver->id : $approver;
+
+        return DB::transaction(function () use ($movement, $approverId) {
             if (! $movement->isApplied()) {
                 $movement->update(['applied_at' => now()]);
             }
 
             $employee = $movement->employee;
 
-            if ($employee !== null) {
-                $this->process->forDay($employee, $movement->movement_date, force: true);
+            if ($employee === null) {
+                return $movement->fresh();
+            }
+
+            $date = Carbon::parse($movement->movement_date)->startOfDay();
+
+            // ⭐ Early leave (27 Oct 2026). A day that has not happened yet is
+            // left to the nightly run: processing it now would write a
+            // half-punched (or absent) day for a date still in progress.
+            if ($movement->type->isEarlyLeave() && $date->greaterThan(Carbon::today())) {
+                return $movement->fresh();
+            }
+
+            $day = $this->process->forDay($employee, $date, force: true);
+
+            // ⭐ Approved early leave = no deduction AND the day is finalised:
+            // the approver has made the judgement POL-06 asks for. Only a
+            // finished day, and only when nothing else on it still needs a
+            // human (a missing punch, a band-3 late): those stay provisional.
+            if ($movement->type->isEarlyLeave()
+                && $day !== null
+                && $date->lessThan(Carbon::today())
+                && ! $day->is_provisional
+                && ! $day->holds_payroll) {
+                $this->finalize->handle([$day], $approverId);
             }
 
             return $movement->fresh();

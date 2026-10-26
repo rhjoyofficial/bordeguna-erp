@@ -17,6 +17,9 @@ enum MovementType: string
     case OfficialWork = 'official_work';
     case HolidayWork = 'holiday_work';
     case WorkFromHome = 'work_from_home';
+    // ⭐ 27 Oct 2026 (Joy's HRM queue): leaving before the shift ends, asked
+    // for and approved. The movement's from_time is the time of leaving.
+    case EarlyLeave = 'early_leave';
 
     public function label(): string
     {
@@ -25,6 +28,7 @@ enum MovementType: string
             self::OfficialWork => 'Official work outside the office',
             self::HolidayWork => 'Work on a holiday or off-day',
             self::WorkFromHome => 'Work from home',
+            self::EarlyLeave => 'Early leave',
         };
     }
 
@@ -49,7 +53,9 @@ enum MovementType: string
     {
         return match ($this) {
             self::FieldDuty, self::OfficialWork => true,
-            self::HolidayWork, self::WorkFromHome => false,
+            // ⚠ Early leave excuses the END of a day the person was present
+            // for; it never stands in for the punches that prove they came.
+            self::HolidayWork, self::WorkFromHome, self::EarlyLeave => false,
         };
     }
 
@@ -62,6 +68,15 @@ enum MovementType: string
     public function isWorkFromHome(): bool
     {
         return $this === self::WorkFromHome;
+    }
+
+    /**
+     * An approved early leave (POL-04): the early departure it covers carries
+     * no deduction. Read by DayContextBuilder, never by the presence rule.
+     */
+    public function isEarlyLeave(): bool
+    {
+        return $this === self::EarlyLeave;
     }
 
     /**

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
-import { useTranslation } from '@/lib/i18n';
+import { type TranslationKey, useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -51,6 +51,23 @@ interface MySummary {
     holds_payroll: number;
 }
 
+interface DayNeedingAction {
+    date: string;
+    status: string;
+    reason: string;
+    reason_key: TranslationKey;
+    last_out: string | null;
+    early_leave_minutes: number;
+}
+
+interface EarlyLeaveRequest {
+    id: number;
+    date: string;
+    time: string | null;
+    reason: string;
+    status: 'pending' | 'approved' | 'rejected' | 'returned' | 'cancelled';
+}
+
 interface ClockProps {
     employee: { name: string; employee_code: string; office: string | null; may_clock_in_remotely: boolean };
     today: string;
@@ -61,6 +78,200 @@ interface ClockProps {
     recent_days: RecentDay[];
     correction_types: CorrectionType[];
     directions: { value: string; label: string }[];
+    days_needing_action: DayNeedingAction[];
+    early_leave_requests: EarlyLeaveRequest[];
+}
+
+/**
+ * ⭐ Early leave request (Joy's HRM queue, 27 Oct 2026). The employee asks to
+ * leave early on a day; a manager or the owner decides. Approved means no
+ * deduction for leaving early that day; rejected leaves the day to the rules.
+ */
+function EarlyLeaveDialog({ date, time, label }: { date: string; time?: string | null; label?: string }) {
+    const [open, setOpen] = useState(false);
+    const [day, setDay] = useState(date);
+    const [leaveAt, setLeaveAt] = useState(time ?? '15:00');
+    const [reason, setReason] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const { t } = useTranslation();
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                    {label ?? t('early.request')}
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{t('early.title_for', { date: showDate(day) })}</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4">
+                    <p className="text-muted-foreground text-xs">{t('early.hint')}</p>
+                    <div className="flex flex-wrap gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="early-date" required>
+                                {t('early.date')}
+                            </Label>
+                            <Input
+                                id="early-date"
+                                aria-required
+                                type="date"
+                                className="w-auto"
+                                value={day}
+                                onChange={(e) => setDay(e.target.value)}
+                            />
+                            {errors.date && <p className="text-destructive text-xs">{errors.date}</p>}
+                            {errors.movement_date && <p className="text-destructive text-xs">{errors.movement_date}</p>}
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="early-time" required>
+                                {t('early.time')}
+                            </Label>
+                            <Input
+                                id="early-time"
+                                aria-required
+                                type="time"
+                                className="w-auto"
+                                value={leaveAt}
+                                onChange={(e) => setLeaveAt(e.target.value)}
+                            />
+                            {(errors.time || errors.from_time) && <p className="text-destructive text-xs">{errors.time ?? errors.from_time}</p>}
+                        </div>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="early-reason" required>
+                            {t('early.reason_label')}
+                        </Label>
+                        <textarea
+                            id="early-reason"
+                            aria-required
+                            rows={3}
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            placeholder={t('early.reason_placeholder')}
+                            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+                        />
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">{t('early.cancel')}</Button>
+                    </DialogClose>
+                    <Button
+                        disabled={reason.trim() === '' || leaveAt === '' || day === ''}
+                        onClick={() =>
+                            router.post(
+                                route('hrm.clock.early-leave.store'),
+                                { date: day, time: leaveAt, reason },
+                                {
+                                    preserveScroll: true,
+                                    onError: (e: Record<string, string>) => setErrors(e),
+                                    onSuccess: () => {
+                                        setOpen(false);
+                                        setErrors({});
+                                        setReason('');
+                                    },
+                                },
+                            )
+                        }
+                    >
+                        {t('early.send')}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** The provisional days of this cycle with nothing filed, and what can be done about each. */
+function DaysNeedingAction({
+    days,
+    types,
+    directions,
+}: {
+    days: DayNeedingAction[];
+    types: CorrectionType[];
+    directions: { value: string; label: string }[];
+}) {
+    const { t } = useTranslation();
+
+    if (days.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="overflow-x-auto rounded-xl border border-amber-500/50 bg-amber-50 p-4 dark:bg-amber-950/20">
+            <h3 className="text-sm font-medium text-amber-700 dark:text-amber-400">{t('early.needs_action')}</h3>
+            <p className="text-muted-foreground mt-0.5 mb-3 text-xs">{t('early.needs_action_hint')}</p>
+            <table className="w-full min-w-[36rem] text-sm">
+                <tbody>
+                    {days.map((day) => (
+                        <tr key={day.date} className="border-sidebar-border/70 dark:border-sidebar-border border-b last:border-b-0">
+                            <td className="py-2 whitespace-nowrap">{showDate(day.date)}</td>
+                            <td className="py-2">
+                                {day.status}
+                                <span className="text-muted-foreground ml-2 text-xs">{t(day.reason_key)}</span>
+                            </td>
+                            <td className="py-2 text-right whitespace-nowrap">
+                                <div className="inline-flex flex-wrap justify-end gap-1">
+                                    {day.reason_key === 'early.reason.early_departure' && <EarlyLeaveDialog date={day.date} time={day.last_out} />}
+                                    {day.reason_key === 'early.reason.absent' && (
+                                        <Button variant="ghost" size="sm" onClick={() => router.get(route('hrm.my-leave'))}>
+                                            {t('early.file_leave')}
+                                        </Button>
+                                    )}
+                                    <RequestCorrectionDialog
+                                        day={{
+                                            date: day.date,
+                                            status: day.status,
+                                            first_in: null,
+                                            last_out: day.last_out,
+                                            holds_payroll: false,
+                                            is_provisional: true,
+                                            is_locked: false,
+                                        }}
+                                        types={types}
+                                        directions={directions}
+                                    />
+                                </div>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+/** The employee's own early leave requests and where each one stands. */
+function MyEarlyLeaveRequests({ requests }: { requests: EarlyLeaveRequest[] }) {
+    const { t } = useTranslation();
+
+    if (requests.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
+            <h3 className="mb-3 text-sm font-medium">{t('early.my_requests')}</h3>
+            <table className="w-full min-w-[32rem] text-sm">
+                <tbody>
+                    {requests.map((r) => (
+                        <tr key={r.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b last:border-b-0">
+                            <td className="py-2 whitespace-nowrap">{showDate(r.date)}</td>
+                            <td className="py-2 font-mono text-xs">{r.time ?? '-'}</td>
+                            <td className="text-muted-foreground py-2">{r.reason}</td>
+                            <td className="py-2 text-right">
+                                <Badge variant={r.status === 'approved' ? 'secondary' : 'outline'}>{t(`early.status.${r.status}`)}</Badge>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
 }
 
 /**
@@ -224,7 +435,19 @@ function MyTile({ label, value, warn, bad }: { label: string; value: number; war
     );
 }
 
-export default function Clock({ employee, today, punches, filters, summary, statuses, recent_days, correction_types, directions }: ClockProps) {
+export default function Clock({
+    employee,
+    today,
+    punches,
+    filters,
+    summary,
+    statuses,
+    recent_days,
+    correction_types,
+    directions,
+    days_needing_action,
+    early_leave_requests,
+}: ClockProps) {
     const [busy, setBusy] = useState<string | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [myFrom, setMyFrom] = useState(filters.from);
@@ -322,8 +545,13 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                     </div>
                 )}
 
+                <DaysNeedingAction days={days_needing_action} types={correction_types} directions={directions} />
+
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">{t('clock.today')}</h3>
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="text-sm font-medium">{t('clock.today')}</h3>
+                        <EarlyLeaveDialog date={today} />
+                    </div>
                     {punches.length === 0 ? (
                         <p className="text-muted-foreground text-sm">{t('clock.nothing_today')}</p>
                     ) : (
@@ -525,6 +753,8 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                         </table>
                     )}
                 </div>
+
+                <MyEarlyLeaveRequests requests={early_leave_requests} />
             </div>
         </AppLayout>
     );
