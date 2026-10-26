@@ -54,6 +54,7 @@ use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use App\Modules\Purchasing\Support\SupplierChallans;
+use App\Modules\Purchasing\Support\TakeOffWhatTheyOwe;
 use App\Modules\Sales\Support\ProductPricing;
 use App\Support\Documents\RelatedDocuments;
 use App\Support\RecordTimeline;
@@ -837,6 +838,8 @@ class PurchaseOrderController extends Controller
                 'advances' => ['nullable', 'array'],
                 'advances.*.key' => ['required', 'string', 'distinct', 'regex:/^(on_account|advance:\d+)$/'],
                 'advances.*.amount' => ['required', 'numeric', 'gte:0'],
+                // ⭐ 26 Oct 2026 (Joy): one amount taken off everything they owe us.
+                'take_off_amount' => ['nullable', 'numeric', 'gt:0'],
             ];
         }
 
@@ -1095,6 +1098,7 @@ class PurchaseOrderController extends Controller
                 duplicateReason: $data['duplicate_reason'] ?? null,
                 orderDetails: $details + ['terms' => PaymentTerms::of($data['payment_terms_type'] ?? null, $data['payment_terms_days'] ?? null)],
                 advances: array_values($data['advances'] ?? []),
+                takeOff: isset($data['take_off_amount']) ? (string) $data['take_off_amount'] : null,
             );
         } catch (AuthorizationException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
@@ -1126,6 +1130,11 @@ class PurchaseOrderController extends Controller
             $quick->isCompleted() => 'Saved: order, receipt'.($quick->landed_cost_id ? ', landed cost' : '').', bill'.($quick->supplier_payment_id ? ' and payment' : '').'.',
             default => 'Saved, and part of it waits for approval.',
         };
+
+        // ⭐ 26 Oct 2026: what came off what they owe us, in one sentence.
+        if ($quick->wasRecentlyCreated && $quick->bill !== null) {
+            $message = trim($message.' '.TakeOffWhatTheyOwe::sentence(TakeOffWhatTheyOwe::takenOff($quick->bill)));
+        }
 
         $response = redirect()->route('purchasing.buy-and-receive.show', $quick)->with('success', $message);
 

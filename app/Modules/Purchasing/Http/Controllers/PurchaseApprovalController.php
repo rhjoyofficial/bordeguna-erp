@@ -159,6 +159,11 @@ class PurchaseApprovalController extends Controller
                 $rows[] = ['label' => 'Advances to apply', 'value' => collect($p['follow_ups']['advances'])->map(fn ($row) => "{$row['key']}: Tk {$row['amount']}")->implode(', ')];
             }
 
+            // ⭐ 26 Oct 2026: taken off what the firm owes us once it posts.
+            if (! empty($p['follow_ups']['take_off']['amount'])) {
+                $rows[] = ['label' => 'Taken off what they owe us', 'value' => 'Tk '.$p['follow_ups']['take_off']['amount'].': our advance first, then their open invoices by set-off'];
+            }
+
             // ⭐ 24 Oct 2026: Buy and receive pays this bill once it is approved.
             if (! empty($p['follow_ups']['quick_payment'])) {
                 $pay = $p['follow_ups']['quick_payment'];

@@ -59,8 +59,11 @@ class SetOffs
      *
      * @throws ValidationException
      */
-    public function raise(Supplier $supplier, Customer $customer, mixed $date, array $invoices, array $bills, string $reason, User $by): SetOff
+    public function raise(Supplier $supplier, Customer $customer, mixed $date, array $invoices, array $bills, string $reason, User $by, bool $notify = true): SetOff
     {
+        // ⭐ 26 Oct 2026 (purchase taken off what they owe): `$notify` false
+        // when the caller may approve it on the spot and tells the approvers
+        // itself only when it was not (TakeOffWhatTheyOwe), after its commit.
         $on = Carbon::parse($date)->startOfDay();
         $reason = trim($reason);
 
@@ -124,9 +127,18 @@ class SetOffs
             return $setOff;
         });
 
-        $this->notify->handle($setOff->approvalRequest()->firstOrFail(), "Set-off {$setOff->number} ({$supplier->name}, {$setOff->money()->format()}) is waiting for your approval");
+        if ($notify) {
+            $this->notifyApprovers($setOff);
+        }
 
         return $setOff->fresh('lines');
+    }
+
+    /** Tells whoever may approve it that the set-off waits for them. */
+    public function notifyApprovers(SetOff $setOff): void
+    {
+        $setOff->loadMissing('supplier');
+        $this->notify->handle($setOff->approvalRequest()->firstOrFail(), "Set-off {$setOff->number} ({$setOff->supplier->name}, {$setOff->money()->format()}) is waiting for your approval");
     }
 
     /** @return bool whether it is now posted (false: it moved to a later stage) */

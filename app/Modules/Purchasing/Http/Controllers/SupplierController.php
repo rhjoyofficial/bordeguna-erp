@@ -26,6 +26,7 @@ use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use App\Modules\Purchasing\Support\SupplierCredit;
 use App\Modules\Purchasing\Support\SupplierTypes;
+use App\Modules\Purchasing\Support\TakeOffWhatTheyOwe;
 use App\Support\Documents\PartyDocuments;
 use App\Support\Documents\PartyLifetime;
 use App\Support\Lifetime\LifetimeRange;
@@ -440,6 +441,16 @@ class SupplierController extends Controller
     {
         return response()->json(SupplierAdvanceBook::orderedFor($supplier, null)
             ->map(fn (array $row) => SupplierAdvanceController::availableRow($row))->values());
+    }
+
+    /**
+     * ⭐ 26 Oct 2026 (Joy): everything this supplier owes us when it is also
+     * our customer: our advances and their open invoices, for the "Take off
+     * what they owe us" box on the purchase and bill screens.
+     */
+    public function whatTheyOwe(Request $request, Supplier $supplier): JsonResponse
+    {
+        return response()->json(TakeOffWhatTheyOwe::forSupplier($supplier, $request->user()));
     }
 
     public function credit(Request $request, Supplier $supplier): JsonResponse

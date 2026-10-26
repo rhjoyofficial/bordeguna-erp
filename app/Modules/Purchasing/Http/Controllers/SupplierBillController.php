@@ -44,6 +44,7 @@ use App\Modules\Purchasing\Support\ReceiptBilling;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use App\Modules\Purchasing\Support\SupplierCredit;
+use App\Modules\Purchasing\Support\TakeOffWhatTheyOwe;
 use App\Support\Documents\RelatedDocuments;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
@@ -378,6 +379,9 @@ class SupplierBillController extends Controller
             'advances' => ['nullable', 'array'],
             'advances.*.key' => ['required', 'string', 'distinct', 'regex:/^(on_account|advance:\d+)$/'],
             'advances.*.amount' => ['required', 'numeric', 'gte:0'],
+            // ⭐ 26 Oct 2026 (Joy): one amount taken off everything they owe us
+            // (our advance, then their open invoices by set-off).
+            'take_off_amount' => ['nullable', 'numeric', 'gt:0'],
             // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): the trade discount
             // printed on the supplier's bill, as an amount, a percentage of the
             // goods, or per line; always with the supplier's document number.
@@ -478,6 +482,16 @@ class SupplierBillController extends Controller
         if ($advanceRows !== [] && ! $request->user()->can('purchasing.advance.record')) {
             throw ValidationException::withMessages(['advances' => 'You may record the bill, but applying advances needs the permission to pay suppliers.']);
         }
+
+        $takeOff = isset($data['take_off_amount']) ? Money::ofTaka((string) $data['take_off_amount']) : null;
+
+        if ($takeOff !== null && ! $request->user()->can('purchasing.advance.record')) {
+            throw ValidationException::withMessages(['take_off' => 'You may record the bill, but taking it off what they owe us needs the permission to pay suppliers.']);
+        }
+
+        if ($takeOff !== null && $advanceRows !== []) {
+            throw ValidationException::withMessages(['take_off' => 'Either pick the advances one by one or type one amount to take off what they owe us, not both.']);
+        }
         // ── end supplier advances ─────────────────────────────────────────
 
         // ⭐ Supplier discounts (ruling P3): the trade discount on the supplier's bill.
@@ -496,7 +510,7 @@ class SupplierBillController extends Controller
         try {
             // ⚠ One transaction: a refused advance (or discount) leaves no bill behind.
             // The trade discount is taken first, so the advance applies to what is really owed.
-            $bill = DB::transaction(function () use ($action, $supplier, $billOrder, $data, $lines, $request, $advanceRows, $tradeDiscount, $services, $carriage, $billTerms) {
+            $bill = DB::transaction(function () use ($action, $supplier, $billOrder, $data, $lines, $request, $advanceRows, $tradeDiscount, $services, $carriage, $billTerms, $takeOff) {
                 $bill = $action->handle(
                     supplier: $supplier,
                     billNumber: $data['bill_number'],
@@ -521,12 +535,26 @@ class SupplierBillController extends Controller
                     app(ApplySupplierAdvances::class)->handle($bill, SupplierAdvanceController::resolveRows($advanceRows), $data['bill_date'], $request->user());
                 }
 
+                // ⭐ 26 Oct 2026: one amount off what they owe us, all or nothing with the bill.
+                if ($takeOff !== null) {
+                    try {
+                        app(TakeOffWhatTheyOwe::class)->apply($bill, $takeOff, $data['bill_date'], $request->user());
+                    } catch (ValidationException $e) {
+                        throw ValidationException::withMessages(['take_off' => collect($e->errors())->flatten()->all()]);
+                    }
+                }
+
                 return $bill;
             });
         } catch (PurchaseApprovalRequired $e) {
             // ⭐ Purchasing approvals (ruling P7): nothing posted; saved as
             // pending with the advances the maker chose, applied on approval.
             $e->draft->withFollowUp('advances', $advanceRows);
+
+            if ($takeOff !== null) {
+                $e->draft->withFollowUp('take_off', ['amount' => $takeOff->toTaka()]);
+            }
+
             $approval = app(PurchasingApprovalGate::class)->hold($e, $request->user());
 
             return redirect()->route('purchasing.approvals.show', $approval)
@@ -540,8 +568,10 @@ class SupplierBillController extends Controller
             throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
         }
 
+        $takenOff = $takeOff === null ? '' : ' '.TakeOffWhatTheyOwe::sentence(TakeOffWhatTheyOwe::takenOff($bill));
+
         return redirect()->route('purchasing.bills.show', $bill)
-            ->with('success', "Bill {$bill->bill_number} recorded.".$this->carriageSentence($bill));
+            ->with('success', "Bill {$bill->bill_number} recorded.".$this->carriageSentence($bill).$takenOff);
     }
 
     /** ⭐ Ruling P5: where the bill's carriage went in the landed-cost workflow. */
@@ -746,6 +776,9 @@ class SupplierBillController extends Controller
             // ── Supplier advances (ruling P2) ─────────────────────────────
             'advances' => $this->advancesFor($bill),
             // ── end supplier advances ─────────────────────────────────────
+            // ⭐ 26 Oct 2026: set-offs of this bill against the firm's own
+            // invoices (the advances have their own table above).
+            'set_offs' => array_values(array_filter(TakeOffWhatTheyOwe::takenOff($bill), fn (array $row) => $row['kind'] === 'set_off')),
             // ⚠ Offered only when it would not be refused. The refusal still
             // stands server-side either way.
             // ⭐ Ruling P6: a supplier agreed a later date; changed with a reason.

@@ -24,6 +24,7 @@ use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\QuickPurchaseApprovals;
 use App\Modules\Purchasing\Support\SupplierChallans;
+use App\Modules\Purchasing\Support\TakeOffWhatTheyOwe;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
@@ -130,9 +131,20 @@ class RecordQuickPurchase
         // ⭐ Initial plan B1 (R56, 25 Oct 2026): earlier advances to this
         // supplier taken off the bill, as the bill screen does (key + amount).
         array $advances = [],
+        // ⭐ 26 Oct 2026 (Joy): ONE amount taken off everything the firm owes
+        // us, our advance first and then their open invoices by set-off
+        // (TakeOffWhatTheyOwe). Instead of the per-advance picks, not with them.
+        ?string $takeOff = null,
     ): QuickPurchase {
         $advances = array_values(array_filter($advances, fn (array $row) => Money::ofTaka((string) ($row['amount'] ?? '0'))->minor > 0));
-        $this->authorize($by, $extraCosts !== [] || ! empty($orderDetails['charges']), $payment, $tradeDiscount, $advances !== []);
+        $takeOffMoney = $takeOff === null || trim($takeOff) === '' ? null : Money::ofTaka(trim($takeOff));
+        $takeOffMoney = $takeOffMoney !== null && $takeOffMoney->minor > 0 ? $takeOffMoney : null;
+
+        if ($takeOffMoney !== null && $advances !== []) {
+            throw ValidationException::withMessages(['take_off' => 'Either pick the advances one by one or type one amount to take off what they owe us, not both.']);
+        }
+
+        $this->authorize($by, $extraCosts !== [] || ! empty($orderDetails['charges']), $payment, $tradeDiscount, $advances !== [] || $takeOffMoney !== null);
         $this->pendingApproval = null;
 
         // ⚠ A replay returns what the first submission made, before anything
@@ -147,7 +159,7 @@ class RecordQuickPurchase
             $quick = DB::transaction(fn () => $this->run(
                 $requestKey, $supplier, $warehouse, $purchasedOn, $lines, $billNumber, $by,
                 $challanNumber, $dueDate, $note, $backdateReason, $extraCosts, $payment, $tradeDiscount,
-                $dueDateReason, $duplicateReason, $orderDetails ?? [], $advances,
+                $dueDateReason, $duplicateReason, $orderDetails ?? [], $advances, $takeOffMoney,
             ));
         } catch (UniqueConstraintViolationException $e) {
             // ⚠⚠ Two submissions with the same key at once: the second insert
@@ -211,6 +223,7 @@ class RecordQuickPurchase
         ?string $duplicateReason,
         array $orderDetails,
         array $advances = [],
+        ?Money $takeOff = null,
     ): QuickPurchase {
         $approvals = app(QuickPurchaseApprovals::class);
         $waiting = [];
@@ -384,6 +397,12 @@ class RecordQuickPurchase
                 $this->pendingApproval->draft->withFollowUp('advances', $advances);
             }
 
+            // ⭐ 26 Oct 2026: the one amount taken off what they owe us, the
+            // same way: replayed by PurchasingApprovalGate::replayBill.
+            if ($this->pendingApproval !== null && $takeOff !== null) {
+                $this->pendingApproval->draft->withFollowUp('take_off', ['amount' => $takeOff->toTaka()]);
+            }
+
             // ⭐ 24 Oct 2026: the payment typed with the purchase goes with the
             // held bill, so approving the bill pays it too (it used to be lost:
             // the screen promised "the payment is made after that" and the
@@ -427,6 +446,20 @@ class RecordQuickPurchase
                 $purchasedOn,
                 $by,
             ));
+        }
+
+        // ── 4c. Taken off what they owe us (Joy, 26 Oct 2026) ───────────────
+        // Our advance first, then their open invoices by set-off; a set-off
+        // this person may not approve waits, and the result says so.
+        if ($takeOff !== null) {
+            $taken = $this->step(
+                fn (string $key) => in_array($key, ['applied_on', 'set_off_on'], true) ? 'purchased_on' : 'take_off',
+                fn () => app(TakeOffWhatTheyOwe::class)->apply($bill->fresh(), $takeOff, $purchasedOn, $by),
+            );
+
+            if ($taken['set_off'] !== null && ! $taken['posted']) {
+                $waiting[] = "Set-off {$taken['set_off']->number} ({$taken['set_off']->money()->format()} off their invoices) waits for approval; until it is approved the bill still owes that part.";
+            }
         }
 
         // ── 5. The payment, when one was made ───────────────────────────────

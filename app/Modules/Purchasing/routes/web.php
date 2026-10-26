@@ -57,6 +57,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // ⭐ Initial plan B1 (R56): open advances for "Allocate advance".
         Route::get('suppliers/{supplier}/open-advances', [SupplierController::class, 'openAdvances'])
             ->middleware('can:purchasing.advance.record')->whereNumber('supplier')->name('suppliers.open-advances');
+        // ⭐ 26 Oct 2026: our advances AND their open invoices, for "Take off what they owe us".
+        Route::get('suppliers/{supplier}/what-they-owe', [SupplierController::class, 'whatTheyOwe'])
+            ->middleware('can:purchasing.advance.record')->whereNumber('supplier')->name('suppliers.what-they-owe');
     });
 
     // ⚠ Exporting the supplier list hands over bank account numbers, BIN and

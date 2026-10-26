@@ -525,6 +525,14 @@ class PurchasingApprovalGate
             app(ApplySupplierAdvances::class)->handle($bill, SupplierAdvanceController::resolveRows($advances), $p['bill_date'], $maker);
         }
 
+        // ⭐ 26 Oct 2026: the one amount the maker took off what the firm owes
+        // us (our advance, then their invoices by set-off), as the maker. The
+        // set-off posts now only when the maker may approve it; otherwise it
+        // waits in the inbox like any other.
+        if (! empty($p['follow_ups']['take_off']['amount'])) {
+            app(TakeOffWhatTheyOwe::class)->apply($bill->fresh(), Money::ofTaka((string) $p['follow_ups']['take_off']['amount']), $p['bill_date'], $maker);
+        }
+
         // ⭐ 24 Oct 2026: the payment typed with a Buy and receive purchase
         // whose bill waited for approval. The approver saw it on the request
         // (PurchaseApprovalController), so it posts with the bill, all or

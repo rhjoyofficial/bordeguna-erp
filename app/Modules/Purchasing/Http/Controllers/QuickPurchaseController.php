@@ -23,6 +23,7 @@ use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\PurchasingEmployees;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use App\Modules\Purchasing\Support\RefusalMessage;
+use App\Modules\Purchasing\Support\TakeOffWhatTheyOwe;
 use App\Support\Documents\RelatedDocuments;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -167,6 +168,8 @@ class QuickPurchaseController extends Controller
             'advances' => ['nullable', 'array'],
             'advances.*.key' => ['required', 'string', 'distinct', 'regex:/^(on_account|advance:\d+)$/'],
             'advances.*.amount' => ['required', 'numeric', 'gte:0'],
+            // ⭐ 26 Oct 2026 (Joy): one amount taken off everything they owe us.
+            'take_off_amount' => ['nullable', 'numeric', 'gt:0'],
         ], [
             'purchased_on.before_or_equal' => 'The purchase date cannot be in the future.',
             'due_date.after_or_equal' => 'The due date cannot be before the purchase date.',
@@ -265,6 +268,7 @@ class QuickPurchaseController extends Controller
                 duplicateReason: $data['duplicate_reason'] ?? null,
                 orderDetails: empty($data['purchasing_employee_id']) ? null : ['purchasing_employee_id' => (int) $data['purchasing_employee_id']],
                 advances: array_values($data['advances'] ?? []),
+                takeOff: isset($data['take_off_amount']) ? (string) $data['take_off_amount'] : null,
             );
         } catch (AuthorizationException $e) {
             throw ValidationException::withMessages(['quick' => $e->getMessage()]);
@@ -281,6 +285,11 @@ class QuickPurchaseController extends Controller
             $quick->isCompleted() => 'Purchase recorded: order, receipt, bill'.($quick->supplier_payment_id ? ' and payment' : '').' are saved.',
             default => 'Purchase saved, and part of it waits for approval.',
         };
+
+        // ⭐ 26 Oct 2026: what came off what they owe us, in one sentence.
+        if ($quick->wasRecentlyCreated && $quick->bill !== null) {
+            $message = trim($message.' '.TakeOffWhatTheyOwe::sentence(TakeOffWhatTheyOwe::takenOff($quick->bill)));
+        }
 
         return redirect()->route('purchasing.buy-and-receive.show', $quick)->with('success', $message);
     }
@@ -306,6 +315,8 @@ class QuickPurchaseController extends Controller
         return Inertia::render('purchasing/buy-and-receive/show', [
             // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
             'related' => RelatedDocuments::for($quickPurchase, request()->user()),
+            // ⭐ 26 Oct 2026: each advance used and each set-off against the bill.
+            'taken_off' => $q->bill === null ? [] : TakeOffWhatTheyOwe::takenOff($q->bill),
             'purchase' => [
                 'id' => $q->id,
                 'status' => $q->status,
