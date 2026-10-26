@@ -23,7 +23,6 @@ import { courierSales } from './i18n/courier-sales';
 import { courierSettings } from './i18n/courier-settings';
 import { customerAdvances } from './i18n/customer-advances';
 import { customerLookup } from './i18n/customer-lookup';
-import { whoOwesWhat } from './i18n/who-owes-what';
 import { dashboards } from './i18n/dashboards';
 import { employeeCash } from './i18n/employee-cash';
 import type { Entry } from './i18n/entry';
@@ -74,6 +73,7 @@ import { stockReservation } from './i18n/stock-reservation';
 import { supplierTerms } from './i18n/supplier-terms';
 import { tickets } from './i18n/tickets';
 import { units } from './i18n/units';
+import { whoOwesWhat } from './i18n/who-owes-what';
 
 /**
  * Bangla UI phase 1 (C-I18N-2/3).
