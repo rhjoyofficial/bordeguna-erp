@@ -23,6 +23,13 @@ interface TeamMember {
     name: string;
     designation: string | null;
     today: string | null;
+    // ⭐ 27 Oct 2026: the member's leave year, the same figures as HR's register.
+    leave: {
+        types: Record<number, { got: number; used: number; left: number }>;
+        paid_leave: number;
+        unpaid_leave: number;
+        absent: number;
+    } | null;
     pending_leave: PendingLeave[];
 }
 
@@ -40,7 +47,15 @@ const todayLabel: Record<string, string> = {
     needs_review: 'Needs review',
 };
 
-export default function MyTeam({ team }: { team: TeamMember[] }) {
+export default function MyTeam({
+    team,
+    leave_year,
+    leave_types = [],
+}: {
+    team: TeamMember[];
+    leave_year: number;
+    leave_types?: { id: number; name: string }[];
+}) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="My team" />
@@ -83,6 +98,33 @@ export default function MyTeam({ team }: { team: TeamMember[] }) {
                                         {member.today ? (todayLabel[member.today] ?? member.today) : 'No record yet'}
                                     </span>
                                 </div>
+
+                                {member.leave && (
+                                    <div className="space-y-1 border-t pt-2 text-sm">
+                                        <p className="text-muted-foreground text-xs font-medium">Leave in {leave_year}</p>
+                                        {leave_types
+                                            .filter(
+                                                (type) =>
+                                                    (member.leave?.types[type.id]?.got ?? 0) !== 0 || (member.leave?.types[type.id]?.used ?? 0) > 0,
+                                            )
+                                            .map((type) => {
+                                                const cell = member.leave!.types[type.id];
+                                                return (
+                                                    <p key={type.id}>
+                                                        {type.name}: <span className="font-medium">{cell.left} left</span>
+                                                        <span className="text-muted-foreground">
+                                                            {' '}
+                                                            of {cell.got}, {cell.used} used
+                                                        </span>
+                                                    </p>
+                                                );
+                                            })}
+                                        <p className="text-muted-foreground text-xs">
+                                            Paid leave {member.leave.paid_leave} · Unpaid leave {member.leave.unpaid_leave} · Absent{' '}
+                                            {member.leave.absent}
+                                        </p>
+                                    </div>
+                                )}
 
                                 {member.pending_leave.length > 0 && (
                                     <div className="space-y-1 border-t pt-2">

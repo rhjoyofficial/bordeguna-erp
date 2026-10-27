@@ -50,6 +50,9 @@ class LeaveBalance
             'deducts_balance' => $type->deducts_balance,
             'annual_quota' => (float) $type->annual_quota,
             'balance' => round((float) ($totals[$type->id] ?? 0), 2),
+            // ⭐ 27 Oct 2026: what the year gave (grant, carry forward, credits),
+            // so a type with no fixed quota (earned leave) still reads got / used / left.
+            'got' => round((float) ($totals[$type->id] ?? 0) + abs((float) ($taken[$type->id] ?? 0)), 2),
             // Stored negative in the ledger; shown as a positive "used" figure.
             'taken' => round(abs((float) ($taken[$type->id] ?? 0)), 2),
             'can_carry_forward' => $type->can_carry_forward,

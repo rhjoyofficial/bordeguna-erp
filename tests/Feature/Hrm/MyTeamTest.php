@@ -3,9 +3,11 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Enums\LeaveLedgerEntryType;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
+use App\Modules\Hrm\Models\LeaveLedgerEntry;
 use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Models\LeaveType;
 use Illuminate\Support\Carbon;
@@ -108,4 +110,26 @@ it('shows an empty state to somebody who supervises no one', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->component('hrm/my-team')
             ->has('team', 0));
+});
+
+it('shows the supervisor each report leave year: left, got, used and unpaid days', function () {
+    $type = LeaveType::create([
+        'business_id' => $this->business->id, 'name' => 'Casual', 'code' => 'CL',
+        'is_paid' => true, 'deducts_balance' => true, 'annual_quota' => 10, 'is_active' => true,
+    ]);
+    LeaveLedgerEntry::create(['employee_id' => $this->first->id, 'leave_type_id' => $type->id, 'year' => 2026,
+        'entry_type' => LeaveLedgerEntryType::Grant, 'days' => 10, 'occurred_on' => '2026-01-01']);
+    LeaveLedgerEntry::create(['employee_id' => $this->first->id, 'leave_type_id' => $type->id, 'year' => 2026,
+        'entry_type' => LeaveLedgerEntryType::Taken, 'days' => -3, 'occurred_on' => '2026-08-10']);
+
+    $this->actingAs($this->boss->user)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('hrm.my-team'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('leave_year', 2026)
+            ->where('leave_types.0.name', 'Casual')
+            ->where("team.0.leave.types.{$type->id}.left", 7)
+            ->where("team.0.leave.types.{$type->id}.got", 10)
+            ->where("team.0.leave.types.{$type->id}.used", 3)
+            // The outsider is not on the team, so not in its figures either.
+            ->has('team', 2));
 });

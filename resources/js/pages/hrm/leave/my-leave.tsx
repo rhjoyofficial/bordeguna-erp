@@ -28,6 +28,7 @@ interface Balance {
     annual_quota: number;
     balance: number;
     taken: number;
+    got: number;
     can_carry_forward: boolean;
     carry_forward_cap: number | null;
 }
@@ -306,6 +307,15 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                         </p>
                     </div>
                     <div className="flex gap-3">
+                        {/* ⭐ 27 Oct 2026: earlier leave years stay readable (Jan to Dec, reset on 1 Jan). */}
+                        <Input
+                            type="number"
+                            className="w-24"
+                            aria-label={t('my_leave.year')}
+                            title={t('my_leave.year')}
+                            defaultValue={year}
+                            onBlur={(e) => router.get(route('hrm.my-leave'), { year: Number(e.target.value) }, { preserveScroll: true })}
+                        />
                         <RequestMovementDialog types={movement_types} />
                         <RequestLeaveDialog types={leave_types} portions={portions} />
                     </div>
@@ -318,9 +328,7 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                             <div key={b.id} className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
                                 <div className="text-sm font-medium">{b.name}</div>
                                 <div className="mt-1 text-2xl font-medium">{b.balance}</div>
-                                <div className="text-muted-foreground text-xs">
-                                    {t('my_leave.days_available', { taken: b.taken, quota: b.annual_quota })}
-                                </div>
+                                <div className="text-muted-foreground text-xs">{t('my_leave.days_available', { taken: b.taken, got: b.got })}</div>
                                 {b.can_carry_forward && b.carry_forward_cap !== null && (
                                     <div className="text-muted-foreground mt-2 text-xs">
                                         {t('my_leave.carries_forward', { cap: b.carry_forward_cap })}

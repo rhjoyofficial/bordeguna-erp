@@ -41,9 +41,10 @@ export const selfService = {
     'my_leave.to_optional': { en: 'To (optional)', bn: 'শেষ (ঐচ্ছিক)' },
     'my_leave.place_optional': { en: 'Place (optional)', bn: 'স্থান (ঐচ্ছিক)' },
     'my_leave.days_available': {
-        en: 'days available · {taken} taken of {quota}',
-        bn: 'দিন বাকি · {quota} দিনের মধ্যে {taken} দিন নেওয়া হয়েছে',
+        en: 'days left · got {got} this year, used {taken}',
+        bn: 'দিন বাকি · এ বছর পেয়েছেন {got} দিন, নিয়েছেন {taken} দিন',
     },
+    'my_leave.year': { en: 'Leave year', bn: 'ছুটির বছর' },
     'my_leave.carries_forward': {
         en: 'Carries forward up to {cap} days; anything above lapses at year end.',
         bn: 'সর্বোচ্চ {cap} দিন পরের বছরে যাবে; এর বেশি হলে বছর শেষে বাতিল হবে।',
