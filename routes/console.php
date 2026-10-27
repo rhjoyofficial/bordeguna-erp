@@ -68,10 +68,14 @@ Schedule::command(DisableDueSeparations::class)
     ->dailyAt('00:30')
     ->withoutOverlapping();
 
-// The monthly earned-leave accrual (Joy, 24 Aug 2026). Runs on the 1st for the
-// month that just ended, at 01:00 - comfortably after the 23:00 attendance
-// processing has settled the final day of that month, because the lateness
-// counts it reads are exactly what that run produces.
+// The monthly earned-leave accrual (Joy, 24 Aug 2026). Runs at 01:00 the day
+// after the period closes - comfortably after the 23:00 attendance processing
+// has settled its final day, because the lateness counts it reads are exactly
+// what that run produces.
+//
+// ⭐ 27 Oct 2026 (Joy): "earned leave month must follows 24-23 salary cycle".
+// The period is the payroll cycle now, so it runs on the 24th for the cycle
+// that ended on the 23rd (it used to run on the 1st for the calendar month).
 //
 // ⚠ It COMMITS rather than previewing. The job adds days, it is idempotent per
 // employee and month, and a scheduled job that needs a flag to act is a job
@@ -85,7 +89,7 @@ Schedule::command(ReleaseDueAmortizations::class)
     ->runInBackground();
 
 Schedule::command(AccrueEarnedLeave::class)
-    ->monthlyOn(1, '01:00')
+    ->monthlyOn(24, '01:00')
     ->withoutOverlapping()
     ->runInBackground();
 

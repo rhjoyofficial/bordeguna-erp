@@ -11,6 +11,7 @@ use App\Modules\Hrm\Models\EarnedLeaveAccrual;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\LeaveLedgerEntry;
 use App\Modules\Hrm\Models\LeaveType;
+use App\Modules\Hrm\Support\PayrollCycle;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -29,19 +30,23 @@ use Illuminate\Support\Facades\DB;
  * than an effective-dated one, so a confirmation date, when the record carries
  * one, is what says whether they were permanent back then.
  *
- * ⚠⚠ The month is still the CALENDAR month, and that is now a DELIBERATE
- * DIFFERENCE rather than an alignment. The reason written here originally was
- * that the lateness ladders reset per calendar month too; since 9 Sep 2026
- * they reset on the payroll cycle (`DailyAttendance::priorOccurrences`), so
- * that reason is gone.
+ * ⭐ 27 Oct 2026 (Joy, answering the question this docblock used to ask):
+ * "earned leave month must follows 24-23 salary cycle. for employees
+ * everything not 1-31 always 24-23". The month accrued is now the PAYROLL
+ * CYCLE carrying that label, read from `PayrollCycle::forMonth` (the one place
+ * that knows the cycle): month 10 is 24 Sep - 23 Oct. Lates are counted over
+ * the cycle's dates and "permanent" is judged on the cycle's last day (the
+ * 23rd). A business configured with start day 1 gets the calendar month back.
  *
- * It was left on the calendar month on purpose. This count is NOT coupled to
- * the ladders: `lateCounts()` counts DAYS in a band over a date range and
- * never reads `occurrence_number`, so it keeps measuring correctly either
- * way. Moving it would change leave ENTITLEMENT, which is a liability and a
- * business decision, not a consequence of fixing a payroll counter.
+ * ⚠⚠ History before the switch stays as it was. Live rows for 2026 month 8
+ * and month 9 were decided on the CALENDAR month (granted on 1 Sep and 1 Oct,
+ * counting 1-31 Aug and 1-30 Sep). Month 10 is the first cycle month, so
+ * 24-30 Sep was counted for lates in both month 9 and month 10. Nothing is
+ * granted twice: the decision row is unique per (employee, year, month) and
+ * the labels do not overlap.
  *
- * ▶ Open for Joy: should the earned-leave month follow the 24-23 cycle too?
+ * ⚠ A cycle that has not ended yet is refused. Its lates are not all in, and
+ * the unique row would freeze an early decision for good.
  *
  * ⚠ The thresholds and the rate are policy data on the company-default
  * attendance policy, so HR revises them on the same screen as the ladders and
@@ -59,8 +64,15 @@ class AccrueMonthlyEarnedLeave
      */
     public function handle(int $year, int $month, bool $dryRun = false): array
     {
-        $monthStart = Carbon::create($year, $month, 1)->startOfDay();
-        $monthEnd = $monthStart->copy()->endOfMonth()->startOfDay();
+        // ⭐ 27 Oct 2026: the payroll cycle with this label, not the calendar month.
+        [$monthStart, $monthEnd] = PayrollCycle::forMonth($year, $month);
+
+        if ($monthEnd->gte(Carbon::today())) {
+            return $this->empty(sprintf(
+                'The cycle %s to %s has not ended yet, so it cannot be accrued.',
+                $monthStart->format('j M Y'), $monthEnd->format('j M Y'),
+            ));
+        }
 
         $accrual = $this->configFor($monthEnd);
 
@@ -99,11 +111,11 @@ class AccrueMonthlyEarnedLeave
 
             $reason = match (true) {
                 $ordinary > $accrual->maxOrdinaryLates => sprintf(
-                    '%d ordinary lates in the month, more than the %d allowed.',
+                    '%d ordinary lates in the cycle, more than the %d allowed.',
                     $ordinary, $accrual->maxOrdinaryLates,
                 ),
                 $serious > $accrual->maxSeriousLates => sprintf(
-                    '%d serious lates in the month, more than the %d allowed.',
+                    '%d serious lates in the cycle, more than the %d allowed.',
                     $serious, $accrual->maxSeriousLates,
                 ),
                 default => null,
@@ -124,7 +136,7 @@ class AccrueMonthlyEarnedLeave
                 continue;
             }
 
-            $this->record($employee, $earned, $year, $month, $monthEnd, $accrual, $ordinary, $serious, $reason);
+            $this->record($employee, $earned, $year, $month, $monthStart, $monthEnd, $accrual, $ordinary, $serious, $reason);
         }
 
         return [
@@ -215,13 +227,14 @@ class AccrueMonthlyEarnedLeave
         LeaveType $earned,
         int $year,
         int $month,
+        Carbon $monthStart,
         Carbon $monthEnd,
         ElAccrualConfig $accrual,
         int $ordinary,
         int $serious,
         ?string $reason,
     ): void {
-        DB::transaction(function () use ($employee, $earned, $year, $month, $monthEnd, $accrual, $ordinary, $serious, $reason) {
+        DB::transaction(function () use ($employee, $earned, $year, $month, $monthStart, $monthEnd, $accrual, $ordinary, $serious, $reason) {
             EarnedLeaveAccrual::create([
                 'employee_id' => $employee->id,
                 'year' => $year,
@@ -249,8 +262,10 @@ class AccrueMonthlyEarnedLeave
                     'days' => $accrual->daysPerMonth,
                     'occurred_on' => $monthEnd->toDateString(),
                     'note' => sprintf(
-                        'Earned leave for %s: %s day(s). %d ordinary and %d serious lates, within the allowance.',
+                        'Earned leave for %s (%s to %s): %s day(s). %d ordinary and %d serious lates, within the allowance.',
                         $monthEnd->format('F Y'),
+                        $monthStart->format('j M'),
+                        $monthEnd->format('j M Y'),
                         rtrim(rtrim(number_format($accrual->daysPerMonth, 2), '0'), '.'),
                         $ordinary,
                         $serious,

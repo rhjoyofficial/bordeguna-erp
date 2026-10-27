@@ -24,6 +24,8 @@ use App\Modules\Hrm\Models\HolidayCalendar;
 use App\Modules\Hrm\Models\LeaveType;
 use App\Modules\Hrm\Models\Shift;
 use App\Modules\Hrm\Support\LeaveBalance;
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -333,4 +335,86 @@ it('never turns a forgiven absence or missing-punch day into a worked day for ea
     // And the earned-leave decision is exactly what it was before: the accrual
     // reads lateness only, never days worked, so forgiving cannot earn leave.
     expect(($this->accrue)(true)['rows'])->toBe($before);
+});
+
+// --- 27 Oct 2026 (Joy): the earned-leave month is the 24-23 payroll cycle -----
+
+it('counts lates on 24 to 30 Sep toward cycle month 10, not calendar September', function () {
+    Carbon::setTestNow('2026-10-27 09:00:00');
+    $employee = ($this->makeEmployee)('BDG-000001');
+
+    // Four ordinary lates, all after the 23rd (25 Sep is the weekly Friday off).
+    foreach (['2026-09-24', '2026-09-26', '2026-09-27', '2026-09-28'] as $date) {
+        ($this->lateDay)($employee, $date, '09:05:00');
+    }
+
+    $september = app(AccrueMonthlyEarnedLeave::class)->handle(2026, 9);
+    $october = app(AccrueMonthlyEarnedLeave::class)->handle(2026, 10);
+
+    // Month 9 is 24 Aug - 23 Sep: clean. Month 10 is 24 Sep - 23 Oct: four lates.
+    expect($september['granted'])->toBe(1)
+        ->and($october['withheld'])->toBe(1)
+        ->and(EarnedLeaveAccrual::where('employee_id', $employee->id)->forMonth(2026, 9)->sole()->ordinary_lates)->toBe(0)
+        ->and(EarnedLeaveAccrual::where('employee_id', $employee->id)->forMonth(2026, 10)->sole()->ordinary_lates)->toBe(4);
+});
+
+it('judges permanence on the 23rd, the last day of the cycle', function () {
+    Carbon::setTestNow('2026-10-27 09:00:00');
+    $confirmedInCycle = ($this->makeEmployee)('BDG-000001', 'permanent', '2026-10-20');
+    $confirmedAfter = ($this->makeEmployee)('BDG-000002', 'permanent', '2026-10-24');
+
+    $result = app(AccrueMonthlyEarnedLeave::class)->handle(2026, 10);
+
+    expect($result['granted'])->toBe(1)
+        ->and(app(LeaveBalance::class)->for($confirmedInCycle->id, $this->earned->id, 2026))->toBe(1.0)
+        ->and(app(LeaveBalance::class)->for($confirmedAfter->id, $this->earned->id, 2026))->toBe(0.0);
+});
+
+it('refuses a cycle that has not ended yet and covers 24 Oct to 23 Nov once it has', function () {
+    $employee = ($this->makeEmployee)('BDG-000001');
+    ($this->lateDay)($employee, '2026-10-24', '09:40:00');
+    ($this->lateDay)($employee, '2026-11-23', '09:40:00');
+
+    Carbon::setTestNow('2026-11-23 12:00:00');
+    $early = app(AccrueMonthlyEarnedLeave::class)->handle(2026, 11);
+
+    expect($early['reason'])->toContain('has not ended yet')
+        ->and(EarnedLeaveAccrual::count())->toBe(0);
+
+    Carbon::setTestNow('2026-11-24 01:00:00');
+    $result = app(AccrueMonthlyEarnedLeave::class)->handle(2026, 11);
+
+    // Both edge days are inside the cycle: two serious lates, past the allowance of 1.
+    expect($result['withheld'])->toBe(1)
+        ->and(EarnedLeaveAccrual::where('employee_id', $employee->id)->forMonth(2026, 11)->sole()->serious_lates)->toBe(2);
+});
+
+it('defaults to the cycle that just ended, leaves calendar-month history alone and decides once', function () {
+    Carbon::setTestNow('2026-10-27 09:00:00');
+    $employee = ($this->makeEmployee)('BDG-000001');
+
+    // The month 9 row live already carries, decided on the calendar month.
+    EarnedLeaveAccrual::create([
+        'employee_id' => $employee->id, 'year' => 2026, 'month' => 9,
+        'days_granted' => 1, 'withheld_reason' => null, 'ordinary_lates' => 0, 'serious_lates' => 0,
+    ]);
+
+    $this->artisan('hrm:accrue-earned-leave', ['--business' => $this->business->id])
+        ->expectsOutputToContain('October 2026 (24 Sep to 23 Oct 2026)')
+        ->expectsOutputToContain('1 granted')
+        ->assertSuccessful();
+
+    $this->artisan('hrm:accrue-earned-leave', ['--business' => $this->business->id])
+        ->expectsOutputToContain('0 granted (0 day(s)) · 0 withheld · 1 already decided')
+        ->assertSuccessful();
+
+    expect(EarnedLeaveAccrual::where('employee_id', $employee->id)->pluck('month')->sort()->values()->all())->toBe([9, 10])
+        ->and(app(LeaveBalance::class)->for($employee->id, $this->earned->id, 2026))->toBe(1.0);
+});
+
+it('is scheduled on the 24th, the morning after a cycle closes', function () {
+    $event = collect(app(Schedule::class)->events())
+        ->first(fn ($event) => str_contains((string) $event->command, 'hrm:accrue-earned-leave'));
+
+    expect($event)->not->toBeNull()->and($event->expression)->toBe('0 1 24 * *');
 });
