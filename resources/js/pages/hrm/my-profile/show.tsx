@@ -1,3 +1,4 @@
+import { UpcomingPayAdjustments, type UpcomingPayAdjustment } from '@/components/hrm/upcoming-pay-adjustments';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -105,6 +106,8 @@ interface ShowProps {
     change_requests: ChangeRequestRow[];
     /** ACL-02 lists the employee themselves among those who may see salary - their own only. */
     salary: Salary | null;
+    /** My deductions (27 Oct 2026): the same list as My payslips. */
+    upcoming_adjustments: UpcomingPayAdjustment[];
 }
 
 const statusVariant: Record<string, 'secondary' | 'default' | 'outline' | 'destructive'> = {
@@ -207,7 +210,7 @@ function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup;
     );
 }
 
-export default function MyProfile({ employee, requestable, mfs_providers, change_requests, salary }: ShowProps) {
+export default function MyProfile({ employee, requestable, mfs_providers, change_requests, salary, upcoming_adjustments }: ShowProps) {
     // HRM-007 (14 Oct 2026): every label a staff member reads about themselves.
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [{ title: t('my_profile.title'), href: '/hrm/my-profile' }];
@@ -319,6 +322,8 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                         </table>
                     </div>
                 )}
+
+                <UpcomingPayAdjustments rows={upcoming_adjustments} />
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">{t('my_profile.my_update_requests')}</h3>

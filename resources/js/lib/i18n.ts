@@ -42,6 +42,7 @@ import { lifetime } from './i18n/lifetime';
 import { loans } from './i18n/loans';
 import { marketPricing } from './i18n/market-pricing';
 import { masters } from './i18n/masters';
+import { myDeductions } from './i18n/my-deductions';
 import { openingAssets } from './i18n/opening-assets';
 import { orderChannels } from './i18n/order-channels';
 import { ownerSales } from './i18n/owner-sales';
@@ -777,6 +778,7 @@ const dictionary = {
     ...takeOff,
     ...earlyLeave,
     ...payDecisions,
+    ...myDeductions,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

@@ -3,7 +3,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/compon
 import { datesInText } from '@/lib/dates';
 import { type SharedData } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
-import { AlarmClock, ArrowRight, Bell, CheckSquare, FileWarning, Receipt, Users, type LucideIcon } from 'lucide-react';
+import { AlarmClock, ArrowRight, Bell, CheckSquare, FileWarning, Receipt, Users, Wallet, type LucideIcon } from 'lucide-react';
 
 /**
  * One icon per kind, so a stack of notifications can be told apart without
@@ -16,6 +16,7 @@ const ICONS: Record<string, LucideIcon> = {
     'follow-up': Users,
     expense: Receipt,
     'show-cause': FileWarning,
+    pay: Wallet,
 };
 
 /**

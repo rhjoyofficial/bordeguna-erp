@@ -5,7 +5,7 @@ import AppLayout from '@/layouts/app-layout';
 import { datesInText } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-import { AlarmClock, ArrowRight, Bell, CheckSquare, FileWarning, Receipt, Users, type LucideIcon } from 'lucide-react';
+import { AlarmClock, ArrowRight, Bell, CheckSquare, FileWarning, Receipt, Users, Wallet, type LucideIcon } from 'lucide-react';
 
 interface NotificationRow {
     id: string;
@@ -45,6 +45,7 @@ const ICONS: Record<string, LucideIcon> = {
     'follow-up': Users,
     expense: Receipt,
     'show-cause': FileWarning,
+    pay: Wallet,
 };
 
 /** Turns `show-cause` into `Show cause` for the filter buttons. */

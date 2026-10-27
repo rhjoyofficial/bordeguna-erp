@@ -1,3 +1,4 @@
+import { UpcomingPayAdjustments, type UpcomingPayAdjustment } from '@/components/hrm/upcoming-pay-adjustments';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -23,6 +24,8 @@ interface Props {
     password_hint: string;
     password_unavailable: string | null;
     payslips: PayslipRow[];
+    /** My deductions (27 Oct 2026): approved, not on a finished payslip yet. */
+    upcoming_adjustments: UpcomingPayAdjustment[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'My payslips', href: '/hrm/my-payslips' }];
@@ -32,7 +35,7 @@ const headClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b 
 
 const money = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function MyPayslips({ employee, password_hint, password_unavailable, payslips }: Props) {
+export default function MyPayslips({ employee, password_hint, password_unavailable, payslips, upcoming_adjustments }: Props) {
     const { t } = useTranslation();
 
     return (
@@ -53,6 +56,8 @@ export default function MyPayslips({ employee, password_hint, password_unavailab
                 ) : (
                     <p className="text-muted-foreground text-xs">{t('payslips.password_note', { hint: password_hint })}</p>
                 )}
+
+                <UpcomingPayAdjustments rows={upcoming_adjustments} />
 
                 {payslips.length === 0 ? (
                     <div className={cardClass}>
