@@ -285,3 +285,22 @@ it('undoes the pay decision too when the leave is cancelled, so the ledger nets 
         ->and(($this->sickBalance)())->toBe(10.0)
         ->and((float) LeaveLedgerEntry::where('reference_id', $leave->id)->sum('days'))->toBe(0.0);
 });
+
+it('shows everyone\'s leave year on the register: got, used, left, paid and unpaid days', function () {
+    $leave = ($this->approvedLeave)($this->sick);
+    app(DecideLeavePay::class)->handle($leave, $this->hr, 1, 'Came back a day late');
+    ($this->approvedLeave)($this->unpaidType, '2026-09-21', '2026-09-22');
+
+    ($this->as)($this->hr)->get(route('hrm.leave.index', ['year' => 2026]))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('register.rows', 1)
+            ->where('register.rows.0.name', 'Shoykod Ali')
+            // Sick: 10 granted, 3 taken, 1 given back by the pay decision.
+            ->where("register.rows.0.types.{$this->sick->id}.got", 10)
+            ->where("register.rows.0.types.{$this->sick->id}.used", 2)
+            ->where("register.rows.0.types.{$this->sick->id}.left", 8)
+            // 2 sick days paid; 1 sick day + 2 Unpaid Leave days unpaid.
+            ->where('register.rows.0.paid_leave', 2)
+            ->where('register.rows.0.unpaid_leave', 3)
+            ->where('register.rows.0.made_unpaid', 0));
+});

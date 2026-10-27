@@ -29,6 +29,7 @@ use App\Modules\Hrm\Models\LeaveYearEndRun;
 use App\Modules\Hrm\Models\Movement;
 use App\Modules\Hrm\Notifications\EarlyLeaveDecidedNotification;
 use App\Modules\Hrm\Support\LeaveBalance;
+use App\Modules\Hrm\Support\LeaveRegister;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -78,6 +79,8 @@ class LeaveController extends Controller
                     'note' => $entry->note,
                 ])
                 : collect(),
+            // ⭐ Leave register (27 Oct 2026): everyone's year on one table.
+            'register' => LeaveRegister::for($year),
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
                 ->orderBy('employee_code')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName().' ('.$e->employee_code.')']),

@@ -106,8 +106,24 @@ interface TypeSetting {
     used: string | null;
 }
 
+// ⭐ Leave register (27 Oct 2026): everyone's leave year on one table.
+interface Register {
+    types: { id: number; name: string }[];
+    rows: {
+        id: number;
+        name: string;
+        code: string;
+        types: Record<number, { got: number; used: number; left: number }>;
+        paid_leave: number;
+        unpaid_leave: number;
+        absent: number;
+        made_unpaid: number;
+    }[];
+}
+
 interface Props {
     year: number;
+    register?: Register;
     filters: { employee_id: number | null };
     requests: LeaveRow[];
     movements: MovementRow[];
@@ -751,6 +767,7 @@ export default function LeaveIndex({
     movements,
     balances,
     ledger,
+    register = { types: [], rows: [] },
     employees,
     leave_types,
     type_settings = [],
@@ -768,10 +785,11 @@ export default function LeaveIndex({
     // always try to take less area"). Five stacked full-width sections became
     // ONE tabbed card: the work list (requests) first, the rest a click away
     // instead of a scroll away. Nothing was removed - only the geometry.
-    const [section, setSection] = useState<'requests' | 'movements' | 'types' | 'ledger'>('requests');
+    const [section, setSection] = useState<'requests' | 'register' | 'movements' | 'types' | 'ledger'>('requests');
 
     const sections = [
         { key: 'requests' as const, label: `Requests (${requests.length})` },
+        { key: 'register' as const, label: `Everyone's leave ${year}` },
         { key: 'movements' as const, label: `Movements (${movements.length})` },
         { key: 'types' as const, label: 'Leave types' },
         ...(filters.employee_id !== null && ledger.length > 0 ? [{ key: 'ledger' as const, label: 'Balance ledger' }] : []),
@@ -851,6 +869,86 @@ export default function LeaveIndex({
                     </div>
 
                     <div className="overflow-x-auto p-3">
+                        {section === 'register' && (
+                            <div className="flex flex-col gap-2">
+                                <p className="text-muted-foreground text-xs">
+                                    Each leave type shows left / got, with what was used under it. Paid and unpaid leave count the approved leave that
+                                    starts in {year}; unpaid is what payroll cuts. Absent is a working day with no punch and no leave. Made unpaid is
+                                    a worked day cut for a rule break (approved). Click a name for that person&apos;s requests and balance ledger.
+                                </p>
+                                <table className="w-full min-w-[60rem] text-sm">
+                                    <thead>
+                                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
+                                            <th className="py-1.5">Employee</th>
+                                            {register.types.map((type) => (
+                                                <th key={type.id} className="py-1.5 text-right">
+                                                    {type.name}
+                                                </th>
+                                            ))}
+                                            <th className="py-1.5 text-right">Paid leave</th>
+                                            <th className="py-1.5 text-right">Unpaid leave</th>
+                                            <th className="py-1.5 text-right">Absent</th>
+                                            <th className="py-1.5 text-right">Made unpaid</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {register.rows.length === 0 && (
+                                            <tr>
+                                                <td colSpan={register.types.length + 5} className="text-muted-foreground py-2">
+                                                    No employees.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {register.rows.map((row) => (
+                                            <tr key={row.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                                <td className="py-1.5">
+                                                    <button
+                                                        type="button"
+                                                        className="font-medium hover:underline"
+                                                        onClick={() => reload({ employee_id: row.id })}
+                                                    >
+                                                        {row.name}
+                                                    </button>
+                                                    <div className="text-muted-foreground text-xs">{row.code}</div>
+                                                </td>
+                                                {register.types.map((type) => {
+                                                    const cell = row.types[type.id];
+                                                    return (
+                                                        <td key={type.id} className="py-1.5 text-right tabular-nums">
+                                                            {cell && cell.got !== 0 ? (
+                                                                <>
+                                                                    <span
+                                                                        className={cell.left < 0 ? 'text-destructive font-semibold' : 'font-semibold'}
+                                                                    >
+                                                                        {cell.left}
+                                                                    </span>
+                                                                    <span className="text-muted-foreground"> / {cell.got}</span>
+                                                                    <div className="text-muted-foreground text-xs">{cell.used} used</div>
+                                                                </>
+                                                            ) : cell && cell.used > 0 ? (
+                                                                <span className="text-muted-foreground text-xs">{cell.used} used</span>
+                                                            ) : (
+                                                                <span className="text-muted-foreground">-</span>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                                <td className="py-1.5 text-right tabular-nums">{row.paid_leave || '-'}</td>
+                                                <td className={`py-1.5 text-right tabular-nums ${row.unpaid_leave > 0 ? 'text-destructive' : ''}`}>
+                                                    {row.unpaid_leave || '-'}
+                                                </td>
+                                                <td className={`py-1.5 text-right tabular-nums ${row.absent > 0 ? 'text-destructive' : ''}`}>
+                                                    {row.absent || '-'}
+                                                </td>
+                                                <td className={`py-1.5 text-right tabular-nums ${row.made_unpaid > 0 ? 'text-destructive' : ''}`}>
+                                                    {row.made_unpaid || '-'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                         {section === 'requests' &&
                             (requests.length === 0 ? (
                                 <p className="text-muted-foreground p-2 text-sm">No leave requests yet.</p>
