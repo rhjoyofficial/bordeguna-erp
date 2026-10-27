@@ -10,9 +10,13 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Enums\EmployeeDocumentType;
 use App\Modules\Hrm\Enums\MfsProvider;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\SalaryStructure;
 use App\Modules\Hrm\Support\EmployeeChangeRequestPolicy;
+use App\Modules\Hrm\Support\EmployeePayAdjustments;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -52,12 +56,15 @@ class SelfServiceController extends Controller
         // Correction C5 / ACL-02 lists the employee themselves among the four
         // parties who may see salary — their own only. Read-only: changing pay
         // is a Payroll workflow, never self-service.
-        $structure = \App\Modules\Hrm\Models\SalaryStructure::activeFor($employee->id);
+        $structure = SalaryStructure::activeFor($employee->id);
         $breakdown = $structure?->breakdown();
 
         return Inertia::render('hrm/my-profile/show', [
+            // ⭐ My deductions (27 Oct 2026): the same list as My payslips, next
+            // to his salary.
+            'upcoming_adjustments' => EmployeePayAdjustments::upcoming($employee),
             'salary' => $breakdown === null ? null : [
-                'effective_from' => \Illuminate\Support\Carbon::parse($structure->effective_from)->toDateString(),
+                'effective_from' => Carbon::parse($structure->effective_from)->toDateString(),
                 'basic' => $breakdown->basic,
                 'gross' => $breakdown->gross,
                 'lines' => collect($breakdown->lines)->map(fn ($line) => [
@@ -173,7 +180,7 @@ class SelfServiceController extends Controller
     /**
      * The employee's own change requests in the current business, newest first.
      */
-    private function changeRequestsFor(Employee $employee): \Illuminate\Support\Collection
+    private function changeRequestsFor(Employee $employee): Collection
     {
         return ChangeRequest::where('subject_type', $employee->getMorphClass())
             ->where('subject_id', $employee->id)
