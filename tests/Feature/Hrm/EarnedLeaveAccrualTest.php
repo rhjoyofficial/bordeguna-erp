@@ -395,7 +395,7 @@ it('defaults to the cycle that just ended, leaves calendar-month history alone a
 
     // The month 9 row live already carries, decided on the calendar month.
     EarnedLeaveAccrual::create([
-        'employee_id' => $employee->id, 'year' => 2026, 'month' => 9,
+        'employee_id' => $employee->id, 'year' => 2026, 'month' => 9, 'basis' => 'calendar',
         'days_granted' => 1, 'withheld_reason' => null, 'ordinary_lates' => 0, 'serious_lates' => 0,
     ]);
 
@@ -412,9 +412,11 @@ it('defaults to the cycle that just ended, leaves calendar-month history alone a
         ->and(app(LeaveBalance::class)->for($employee->id, $this->earned->id, 2026))->toBe(1.0);
 });
 
-it('is scheduled on the 24th, the morning after a cycle closes', function () {
+// ⭐ 27 Oct 2026 (Joy): the month is decided when its payroll is calculated,
+// after the attendance is imported. The 24th came too early, so nothing runs it.
+it('is no longer scheduled: payroll calculation decides the month', function () {
     $event = collect(app(Schedule::class)->events())
         ->first(fn ($event) => str_contains((string) $event->command, 'hrm:accrue-earned-leave'));
 
-    expect($event)->not->toBeNull()->and($event->expression)->toBe('0 1 24 * *');
+    expect($event)->toBeNull();
 });

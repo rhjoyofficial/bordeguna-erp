@@ -10,18 +10,24 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
 /**
- * The monthly earned-leave accrual, scheduled for the 24th and callable by
- * hand for a catch-up month.
+ * The monthly earned-leave accrual by hand: a dry run, or a month with no
+ * payroll to decide it.
  *
- * ⭐ 27 Oct 2026 (Joy): the month is the 24-23 payroll cycle, so the job runs
- * the day after a cycle closes and, by default, accrues the cycle that just
- * ended (on 24 Oct, month 10 = 24 Sep - 23 Oct). The default is worked out per
- * business inside the loop because the cycle start day is a business setting.
+ * ⭐ 27 Oct 2026 (Joy): the month is the 24-23 payroll cycle, so by default
+ * this accrues the cycle that last ended (on 27 Oct, month 10 = 24 Sep - 23
+ * Oct). The default is worked out per business inside the loop because the
+ * cycle start day is a business setting.
  *
- * ⚠ Unlike the year-end job this COMMITS by default. It adds days rather than
- * removing them, it is idempotent per employee and month, and a scheduler that
- * needed a flag to do its job would simply never do it. `--dry-run` is there
- * for the human who wants to look first.
+ * ⭐ 27 Oct 2026, later (Joy): "main part is max time i will import the
+ * attendence end of the month so no after i data update will be caculated
+ * when payroll runs." It is NOT scheduled any more. Calculating the month's
+ * payroll decides its earned leave (CalculatePayroll), and a recalculation
+ * before approval decides it again. This command only decides employees with
+ * no decision yet, so whatever it records, the next payroll calculation still
+ * brings up to date.
+ *
+ * ⚠ It COMMITS by default. `--dry-run` is there for the human who wants to
+ * look first.
  */
 class AccrueEarnedLeave extends Command
 {
@@ -31,11 +37,14 @@ class AccrueEarnedLeave extends Command
         {--business= : Limit to one business id}
         {--dry-run : Show the decisions without recording them}';
 
-    protected $description = 'Credit one month of earned leave to every permanent employee whose lateness stayed within the policy';
+    protected $description = 'Credit one month of earned leave to every permanent employee whose lateness stayed within the policy (payroll calculation does this itself; use this for a dry run)';
 
     public function handle(AccrueMonthlyEarnedLeave $accrue, BusinessContext $context): int
     {
         $dryRun = (bool) $this->option('dry-run');
+
+        $this->comment("Earned leave is decided when the month's payroll is calculated, and again on each recalculation until it is approved.");
+        $this->comment('This command only decides employees with no decision for the month yet.');
 
         $businesses = Business::query()
             ->when($this->option('business'), fn ($query, $id) => $query->whereKey($id))

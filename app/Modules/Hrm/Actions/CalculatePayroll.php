@@ -32,6 +32,13 @@ use Throwable;
  * they are fixed. The calculation itself is then one transaction: WFL-09 ticked
  * "the whole batch fails and rolls back", and a partial payroll is worse than
  * none because somebody will pay from it.
+ *
+ * ⭐ 27 Oct 2026 (Joy): "main part is max time i will import the attendence
+ * end of the month so no after i data update will be caculated when payroll
+ * runs." A successful calculation also decides the month's earned leave from
+ * the attendance as it stands (`AccrueMonthlyEarnedLeave`, re-deciding while
+ * the run is not yet approved), and the outcome rides on the validation
+ * report so HR sees it while reviewing the run.
  */
 class CalculatePayroll
 {
@@ -40,6 +47,7 @@ class CalculatePayroll
         private readonly PayrollEngine $engine,
         private readonly ValidatePayrollRun $validator,
         private readonly PayrollProgress $progress,
+        private readonly AccrueMonthlyEarnedLeave $earnedLeave,
     ) {}
 
     public function handle(PayrollPeriod $period, ?PayrollConfig $config = null): PayrollRun
@@ -134,10 +142,48 @@ class CalculatePayroll
             return $run;
         });
 
-        $result->update(['validation_report' => $report, 'is_validated' => true]);
+        $result->update([
+            'validation_report' => [...$report, 'earned_leave' => $this->decideEarnedLeave($period)],
+            'is_validated' => true,
+        ]);
         $this->progress->finish($result, $employees->count());
 
         return $result->fresh(['payslips.lines', 'period']);
+    }
+
+    /**
+     * ⭐ 27 Oct 2026: earned leave for the month is decided when its payroll
+     * is calculated. Outside the payroll transaction on purpose: the payslips
+     * are right whatever happens to a leave day, so a failure here is reported
+     * on the run rather than throwing the calculation away.
+     *
+     * @return array<string, mixed>
+     */
+    private function decideEarnedLeave(PayrollPeriod $period): array
+    {
+        try {
+            $result = $this->earnedLeave->handle($period->year, $period->month, redecide: true);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return ['failed' => 'Earned leave could not be decided: '.$exception->getMessage()];
+        }
+
+        return [
+            'granted' => $result['granted'],
+            'withheld' => $result['withheld'],
+            'changed' => $result['changed'],
+            'frozen' => $result['frozen'],
+            'days' => $result['days'],
+            'reason' => $result['reason'],
+            'rows' => array_map(fn (array $row) => [
+                'employee_code' => $row['employee_code'],
+                'employee' => $row['employee'],
+                'days' => $row['days'],
+                'withheld_reason' => $row['withheld_reason'],
+                'changed' => $row['changed'],
+            ], $result['rows']),
+        ];
     }
 
     /**

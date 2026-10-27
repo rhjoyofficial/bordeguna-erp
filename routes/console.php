@@ -8,7 +8,6 @@ use App\Modules\Commerce\Console\Commands\SettleOnlinePayments;
 use App\Modules\Crm\Console\Commands\NotifyFollowUpsDue;
 use App\Modules\Crm\Console\Commands\SweepDormantCustomersCommand;
 use App\Modules\Foundation\Console\Commands\SendMorningBriefing;
-use App\Modules\Hrm\Console\Commands\AccrueEarnedLeave;
 use App\Modules\Hrm\Console\Commands\DisableDueSeparations;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
 use App\Modules\Hrm\Console\Commands\SendAttendanceReminders;
@@ -68,18 +67,6 @@ Schedule::command(DisableDueSeparations::class)
     ->dailyAt('00:30')
     ->withoutOverlapping();
 
-// The monthly earned-leave accrual (Joy, 24 Aug 2026). Runs at 01:00 the day
-// after the period closes - comfortably after the 23:00 attendance processing
-// has settled its final day, because the lateness counts it reads are exactly
-// what that run produces.
-//
-// ⭐ 27 Oct 2026 (Joy): "earned leave month must follows 24-23 salary cycle".
-// The period is the payroll cycle now, so it runs on the 24th for the cycle
-// that ended on the 23rd (it used to run on the 1st for the calendar month).
-//
-// ⚠ It COMMITS rather than previewing. The job adds days, it is idempotent per
-// employee and month, and a scheduled job that needs a flag to act is a job
-// that never acts.
 // Prepaids, accruals and deferred income release their month (Module 2,
 // Slice 4). Idempotent by the released_through pointer; each schedule posts
 // as its own creator.
@@ -88,10 +75,12 @@ Schedule::command(ReleaseDueAmortizations::class)
     ->withoutOverlapping()
     ->runInBackground();
 
-Schedule::command(AccrueEarnedLeave::class)
-    ->monthlyOn(24, '01:00')
-    ->withoutOverlapping()
-    ->runInBackground();
+// ⭐ 27 Oct 2026 (Joy): the earned-leave accrual is NO LONGER scheduled. "main
+// part is max time i will import the attendence end of the month so no after i
+// data update will be caculated when payroll runs." The 24th came before the
+// month's attendance was in, so the month is now decided when its payroll is
+// calculated (CalculatePayroll). `hrm:accrue-earned-leave` stays for a dry run
+// or a month with no payroll.
 
 // ⚠ Proposes only. Expired stock is already unsellable the moment its date
 // passes (StockBatch::scopeConsumable), so a customer is protected whether or

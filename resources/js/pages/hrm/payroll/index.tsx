@@ -107,11 +107,27 @@ interface Run {
         review_url?: string | null;
         warning_count?: number;
         warnings?: WarningRow[];
+        earned_leave?: EarnedLeaveOutcome;
     } | null;
     awaiting_approval: boolean;
     approval_stage: string | null;
     can_approve: boolean;
     unlock_requests: UnlockRequest[];
+}
+
+/**
+ * ⭐ 27 Oct 2026 (Joy): earned leave is decided when payroll is calculated,
+ * so the run carries the outcome for HR to see while reviewing it.
+ */
+interface EarnedLeaveOutcome {
+    granted?: number;
+    withheld?: number;
+    changed?: number;
+    frozen?: boolean;
+    days?: number;
+    reason?: string | null;
+    failed?: string;
+    rows?: { employee_code: string; employee: string; days: number; withheld_reason: string | null; changed: boolean }[];
 }
 
 interface PeriodRow {
@@ -881,6 +897,52 @@ function AccrualMissing({ run }: { run: Run }) {
     );
 }
 
+/**
+ * ⭐ 27 Oct 2026 (Joy): earned leave is decided when payroll is calculated and
+ * again on each recalculation until the run is approved. One line of totals,
+ * then only the people HR would ask about: withheld, or changed since the
+ * last calculation.
+ */
+function EarnedLeavePanel({ outcome }: { outcome: EarnedLeaveOutcome }) {
+    const notable = (outcome.rows ?? []).filter((row) => row.withheld_reason !== null || row.changed);
+
+    let summary: string;
+    if (outcome.failed) {
+        summary = outcome.failed;
+    } else if (outcome.frozen) {
+        summary = 'Fixed: this month was approved, so its earned leave decisions stand as they were.';
+    } else if (outcome.reason) {
+        summary = outcome.reason;
+    } else {
+        summary = `${outcome.granted ?? 0} granted (${outcome.days ?? 0} day${outcome.days === 1 ? '' : 's'}), ${outcome.withheld ?? 0} withheld`;
+        if (outcome.changed) {
+            summary += `, ${outcome.changed} changed since the last calculation`;
+        }
+    }
+
+    return (
+        <div className={cn(panelClass, 'px-4 py-3')}>
+            <h3 className="text-sm font-medium">Earned leave for this cycle</h3>
+            <p className={cn('mt-0.5 text-xs', outcome.failed ? 'text-destructive' : 'text-muted-foreground')}>{summary}</p>
+            {notable.length > 0 && (
+                <ul className="text-muted-foreground mt-1.5 space-y-0.5 text-xs">
+                    {notable.map((row) => (
+                        <li key={row.employee_code}>
+                            <span className="text-foreground">{row.employee}</span> {row.employee_code}:{' '}
+                            {row.withheld_reason ?? `${row.days} day granted`}
+                            {row.changed && (
+                                <Badge variant="outline" className="ml-2">
+                                    changed
+                                </Badge>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+}
+
 function PeopleIssues({ rows, field }: { rows: (ValidationRow | WarningRow)[]; field: 'issues' | 'warnings' }) {
     const { t } = useTranslation();
 
@@ -1003,6 +1065,10 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
                         </p>
                         <PeopleIssues rows={run.validation_report?.warnings ?? []} field="warnings" />
                     </div>
+                )}
+
+                {run && run.status !== 'draft' && run.validation_report?.earned_leave && (
+                    <EarnedLeavePanel outcome={run.validation_report.earned_leave} />
                 )}
 
                 {run && run.unlock_requests.length > 0 && (
