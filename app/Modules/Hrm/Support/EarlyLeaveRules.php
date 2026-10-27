@@ -44,7 +44,7 @@ class EarlyLeaveRules
         return $value;
     }
 
-    /** Requests one person may file in a calendar month; null = no cap (the decision for now). */
+    /** Requests one person may file in a payroll cycle (24th to 23rd); null = no cap (the decision for now). */
     public static function monthlyCap(): ?int
     {
         $cap = config('hrm.early_leave.monthly_request_cap');
@@ -65,19 +65,26 @@ class EarlyLeaveRules
     }
 
     /**
-     * Requests standing in the calendar month of this date: waiting or
+     * Requests standing in the payroll cycle of this date: waiting or
      * approved, never rejected, returned or cancelled. Pending counts, as with
      * the work-from-home cap, or eight requests filed in a morning would each
      * look fine on their own.
+     *
+     * ⭐ 27 Oct 2026 (Joy): "for employees everything not 1-31 always 24-23".
+     * The cap counts the 24-23 cycle (`PayrollCycle::containing`), so a
+     * request on the 24th opens a fresh count. It counted the calendar month
+     * before.
      */
     public static function usedIn(Employee $employee, Carbon $date): int
     {
+        $cycle = PayrollCycle::containing($date);
+
         return Movement::query()
             ->where('employee_id', $employee->id)
             ->where('type', MovementType::EarlyLeave)
             ->whereNull('cancelled_at')
-            ->whereDate('movement_date', '>=', $date->copy()->startOfMonth()->toDateString())
-            ->whereDate('movement_date', '<=', $date->copy()->endOfMonth()->toDateString())
+            ->whereDate('movement_date', '>=', $cycle['start']->toDateString())
+            ->whereDate('movement_date', '<=', $cycle['end']->toDateString())
             ->whereHas('approvalRequest', fn ($query) => $query->whereIn('status', [ApprovalStatus::Pending, ApprovalStatus::Approved]))
             ->count();
     }

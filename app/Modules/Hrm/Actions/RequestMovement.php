@@ -9,6 +9,7 @@ use App\Modules\Hrm\Enums\MovementType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\Movement;
 use App\Modules\Hrm\Support\EarlyLeaveRules;
+use App\Modules\Hrm\Support\PayrollCycle;
 use App\Modules\Hrm\Support\WorkFromHomeAllowance;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -97,8 +98,11 @@ class RequestMovement
         $when = Carbon::parse($date);
 
         if ($cap !== null && EarlyLeaveRules::usedIn($employee, $when) >= $cap) {
+            // ⭐ 27 Oct 2026: the cap is per 24-23 cycle, and the message names its dates.
+            $cycle = PayrollCycle::containing($when);
+
             throw ValidationException::withMessages([
-                'movement_date' => "{$employee->fullName()} has already used all {$cap} early leave request(s) for {$when->format('F Y')}, counting requests still awaiting approval.",
+                'movement_date' => "{$employee->fullName()} has already used all {$cap} early leave request(s) for ".PayrollCycle::describe($cycle['year'], $cycle['month']).', counting requests still awaiting approval.',
             ]);
         }
     }

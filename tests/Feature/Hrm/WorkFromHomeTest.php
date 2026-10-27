@@ -110,22 +110,23 @@ it('counts requests still awaiting approval against the monthly cap', function (
     ($this->request)('2026-09-08');
 
     expect(fn () => ($this->request)('2026-09-09'))
-        ->toThrow(ValidationException::class, 'already used all 2 work-from-home day(s) for September 2026');
+        ->toThrow(ValidationException::class, 'already used all 2 work-from-home day(s) for September 2026 (24 Aug to 23 Sep 2026)');
 });
 
-it('counts the calendar month, not the payroll cycle', function () {
-    // ⚠ The 24th-to-23rd cycle governs pay. "How many days in September" has to
-    // mean September to the person asking and to their manager.
-    ($this->request)('2026-09-01');
-    ($this->request)('2026-09-30');
+// ⭐ 27 Oct 2026 (Joy): "for employees everything not 1-31 always 24-23". This
+// test used to pin the calendar month; it now pins the cycle boundary.
+it('counts the 24-23 payroll cycle, not the calendar month', function () {
+    // 24 Sep and 23 Oct are the two ends of the cycle labelled October.
+    ($this->request)('2026-09-24');
+    ($this->request)('2026-10-23');
 
-    // The 24th belongs to October's payroll month and to September's calendar
-    // month; the cap is full, so this is refused.
-    expect(fn () => ($this->request)('2026-09-24'))->toThrow(ValidationException::class);
+    // 1 Oct is inside the same cycle; the cap is full, so this is refused.
+    expect(fn () => ($this->request)('2026-10-01'))
+        ->toThrow(ValidationException::class, 'October 2026 (24 Sep to 23 Oct 2026)');
 
-    // A day in the next calendar month is fine even though the payroll month
-    // named October began on 24 September.
-    expect(($this->request)('2026-10-01'))->not->toBeNull();
+    // 23 Sep closes the cycle before and 24 Oct opens the next one: both fine.
+    expect(($this->request)('2026-09-23'))->not->toBeNull()
+        ->and(($this->request)('2026-10-24'))->not->toBeNull();
 });
 
 it('refuses outright when the business allows no work from home at all', function () {
@@ -148,7 +149,7 @@ it('reports what is left this month', function () {
 
     $summary = app(WorkFromHomeAllowance::class)->summaryFor($this->employee, Carbon::parse('2026-09-20'));
 
-    expect($summary)->toMatchArray(['cap' => 2, 'used' => 1, 'remaining' => 1, 'month' => 'September 2026']);
+    expect($summary)->toMatchArray(['cap' => 2, 'used' => 1, 'remaining' => 1, 'month' => 'September 2026 (24 Aug to 23 Sep 2026)']);
 });
 
 it('keeps work from home out of the holiday-work question', function () {

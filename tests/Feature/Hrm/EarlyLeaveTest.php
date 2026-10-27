@@ -266,6 +266,22 @@ it('has no monthly cap by default, and holds one when the setting is given', fun
     ])->assertSessionHasErrors('movement_date');
 });
 
+// ⭐ 27 Oct 2026 (Joy): "for employees everything not 1-31 always 24-23".
+it('counts the monthly cap over the 24-23 cycle, so the 24th opens a fresh count', function () {
+    config(['hrm.early_leave.monthly_request_cap' => 2]);
+
+    // 20 and 22 Oct fill the cycle labelled October (24 Sep - 23 Oct).
+    requestEarly('2026-10-20');
+    requestEarly('2026-10-22');
+
+    earlyAs($this->staffUser)->post(route('hrm.clock.early-leave.store'), [
+        'date' => '2026-10-21', 'time' => '13:00', 'reason' => 'third in the cycle',
+    ])->assertSessionHasErrors(['movement_date' => 'Karim Ahmed has already used all 2 early leave request(s) for October 2026 (24 Sep to 23 Oct 2026), counting requests still awaiting approval.']);
+
+    // Saturday 24 Oct is still October on the calendar, but it is the next cycle.
+    expect(requestEarly('2026-10-24'))->not->toBeNull();
+});
+
 it('approves a request for a day still to come without writing that day', function () {
     $movement = requestEarly('2026-10-20', '15:00');
     earlyAs($this->manager)->post(route('hrm.movements.approve', $movement))->assertRedirect();

@@ -100,6 +100,19 @@ class PayrollCycle
         return ['start' => $start, 'end' => $end, 'year' => (int) $label->year, 'month' => (int) $label->month];
     }
 
+    /**
+     * ⭐ 27 Oct 2026: the cycle as an employee reads it, "November 2026 (24 Oct
+     * to 23 Nov 2026)". A cap or a counter that names only "November" would be
+     * read as the calendar month, which it is not.
+     */
+    public static function describe(int $year, int $month, ?int $startDay = null): string
+    {
+        [$start, $end] = self::forMonth($year, $month, $startDay);
+
+        return Carbon::create($year, $month, 1)->format('F Y')
+            .' ('.$start->format('j M').' to '.$end->format('j M Y').')';
+    }
+
     private static function clamp(int $day): int
     {
         return max(self::MIN_DAY, min(self::MAX_DAY, $day));

@@ -92,8 +92,8 @@ return [
     | the engine knows; anything else is refused rather than silently ignored.
     |
     | `monthly_request_cap` limits how many early leave requests one person may
-    | file in a calendar month, counting those still waiting. Empty = no cap,
-    | which is the decision for now.
+    | file in a payroll cycle (24th to 23rd, since 27 Oct 2026), counting those
+    | still waiting. Empty = no cap, which is the decision for now.
     |
     | `reminder_after_days` is how long a request may wait before its approvers
     | are reminded (once). `cycle_end_warning_days` is how many days before the

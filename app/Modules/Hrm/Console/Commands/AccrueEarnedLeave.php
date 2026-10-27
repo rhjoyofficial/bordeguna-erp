@@ -50,9 +50,7 @@ class AccrueEarnedLeave extends Command
             $year = (int) ($this->option('year') ?: $previous['year']);
             $month = (int) ($this->option('month') ?: $previous['month']);
 
-            [$start, $end] = PayrollCycle::forMonth($year, $month);
-            $label = Carbon::create($year, $month, 1)->format('F Y')
-                .' ('.$start->format('j M').' to '.$end->format('j M Y').')';
+            $label = PayrollCycle::describe($year, $month);
             $this->line('');
             $this->info("{$business->name} - earned leave for {$label}".($dryRun ? ' (dry run)' : ''));
 

@@ -416,7 +416,7 @@ export default function Business({
 
                         <div className="grid gap-2">
                             <Label htmlFor="wfh_monthly_cap" required>
-                                Work from home, days a month
+                                Work from home, days a payroll cycle
                             </Label>
                             <SearchSelect
                                 fit

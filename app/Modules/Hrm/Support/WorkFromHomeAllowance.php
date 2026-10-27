@@ -10,18 +10,19 @@ use App\Modules\Hrm\Models\Movement;
 use Illuminate\Support\Carbon;
 
 /**
- * How many days of work from home somebody has left this month.
+ * How many days of work from home somebody has left this payroll cycle.
  *
  * ⚠⚠ PENDING COUNTS AGAINST THE CAP, not just applied. Counting only approved
  * days would let somebody file eight requests in a morning and have a manager
  * approve them one by one, each looking fine on its own. C-WFH-4 caps the
  * month, so the month is what is counted: everything not rejected or cancelled.
  *
- * ⚠ The CALENDAR month, deliberately, not the 24th-to-23rd payroll cycle. A cap
- * on working from home is an arrangement between a person and their manager,
- * not a payroll quantity, and "how many days in August" must mean August to
- * both of them. ⚠⚠ The two disagree by design; on this project a rule keyed to
- * the wrong month boundary has bitten before.
+ * ⭐ 27 Oct 2026 (Joy): "for employees everything not 1-31 always 24-23". The
+ * cap counts the 24-23 payroll cycle (`PayrollCycle::containing`), so a day on
+ * the 24th starts a fresh count. It was the calendar month on purpose until
+ * then, read as an arrangement rather than a payroll quantity; the owner's
+ * rule settles it the other way. The summary names the cycle with its dates
+ * so "October" is never read as 1-31 October.
  */
 class WorkFromHomeAllowance
 {
@@ -37,10 +38,12 @@ class WorkFromHomeAllowance
     }
 
     /**
-     * Requests already standing in the calendar month of this date.
+     * Requests already standing in the payroll cycle of this date.
      */
     public function usedIn(Employee $employee, Carbon $date): int
     {
+        $cycle = PayrollCycle::containing($date);
+
         return Movement::query()
             ->where('employee_id', $employee->id)
             ->where('type', MovementType::WorkFromHome)
@@ -49,8 +52,8 @@ class WorkFromHomeAllowance
             // and "2026-09-30 00:00:00" sorts AFTER the string "2026-09-30" -
             // so a day worked from home on the last of the month slipped past
             // the cap entirely. Caught by a test that used the 30th on purpose.
-            ->whereDate('movement_date', '>=', $date->copy()->startOfMonth()->toDateString())
-            ->whereDate('movement_date', '<=', $date->copy()->endOfMonth()->toDateString())
+            ->whereDate('movement_date', '>=', $cycle['start']->toDateString())
+            ->whereDate('movement_date', '<=', $cycle['end']->toDateString())
             ->whereHas('approvalRequest', fn ($query) => $query->whereIn('status', ['pending', 'approved']))
             ->count();
     }
@@ -67,12 +70,13 @@ class WorkFromHomeAllowance
     {
         $used = $this->usedIn($employee, $date);
         $cap = $this->capFor();
+        $cycle = PayrollCycle::containing($date);
 
         return [
             'cap' => $cap,
             'used' => $used,
             'remaining' => max(0, $cap - $used),
-            'month' => $date->format('F Y'),
+            'month' => PayrollCycle::describe($cycle['year'], $cycle['month']),
         ];
     }
 }
