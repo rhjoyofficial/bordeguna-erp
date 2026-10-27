@@ -45,12 +45,14 @@ use Illuminate\Support\LazyCollection;
  * Months are PAYROLL CYCLES, labelled where they end: "March" is 24 Feb - 23
  * Mar, and the year runs from 24 Dec of the year before to 23 Dec. That is
  * also where the ladders reset (since 9 Sep 2026) and the month the earned
- * leave decision is made for (from cycle month 10), so a row now counts
- * against one counter. It said CALENDAR months before, reasoning that the
- * ladders reset on the 1st; they no longer do.
+ * leave decision is made for, so a row now counts against one counter. It
+ * said CALENDAR months before, reasoning that the ladders reset on the 1st;
+ * they no longer do.
  *
- * ⚠ Earned leave rows for 2026 months 8 and 9 were decided on the calendar
- * month. They still print against the row with the same label.
+ * ⭐ 27 Oct 2026 (Joy, "reset full recount from aug 24"): the calendar
+ * earned leave decisions for 2026 months 8 and 9 were superseded and month 9
+ * decided again on the cycle. Only the decisions that stand are printed, so
+ * month 8 of 2026 shows none.
  */
 class LatenessRegisterReport implements ReportDefinition
 {
@@ -293,6 +295,7 @@ class LatenessRegisterReport implements ReportDefinition
     {
         return EarnedLeaveAccrual::query()
             ->where('year', $year)
+            ->current()
             ->get()
             ->mapWithKeys(fn (EarnedLeaveAccrual $row) => [$row->employee_id.':'.$row->month => $row])
             ->all();

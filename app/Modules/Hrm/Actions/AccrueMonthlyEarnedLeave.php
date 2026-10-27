@@ -5,12 +5,14 @@ namespace App\Modules\Hrm\Actions;
 use App\Modules\Hrm\Attendance\Policy\ElAccrualConfig;
 use App\Modules\Hrm\Enums\EmploymentType;
 use App\Modules\Hrm\Enums\LeaveLedgerEntryType;
+use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\AttendancePolicy;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\EarnedLeaveAccrual;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\LeaveLedgerEntry;
 use App\Modules\Hrm\Models\LeaveType;
+use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Support\PayrollCycle;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -38,15 +40,26 @@ use Illuminate\Support\Facades\DB;
  * the cycle's dates and "permanent" is judged on the cycle's last day (the
  * 23rd). A business configured with start day 1 gets the calendar month back.
  *
- * ⚠⚠ History before the switch stays as it was. Live rows for 2026 month 8
- * and month 9 were decided on the CALENDAR month (granted on 1 Sep and 1 Oct,
- * counting 1-31 Aug and 1-30 Sep). Month 10 is the first cycle month, so
- * 24-30 Sep was counted for lates in both month 9 and month 10. Nothing is
- * granted twice: the decision row is unique per (employee, year, month) and
- * the labels do not overlap.
+ * ⭐ 27 Oct 2026, later the same day (Joy): "reset full recount from aug 24 to
+ * sep 23, sep 24 to oct 23 based on that add the amount, from the 24 oct to
+ * nov 23 will calculate, main part is max time i will import the attendence
+ * end of the month so no after i data update will be caculated when payroll
+ * runs." Two consequences:
  *
- * ⚠ A cycle that has not ended yet is refused. Its lates are not all in, and
- * the unique row would freeze an early decision for good.
+ *  - The calendar decisions live made for 2026 months 8 and 9 are superseded
+ *    and their grants reversed (`supersede`), and month 9 is decided again on
+ *    the cycle 24 Aug - 23 Sep. That one-time recount is a data migration
+ *    (`RecountEarnedLeaveOnPayrollCycle`). Month 8 is not re-decided: the
+ *    recount starts on 24 Aug.
+ *  - The decision is made when PAYROLL IS CALCULATED for the month
+ *    (`CalculatePayroll` calls this with `$redecide`), not by a job on the
+ *    24th, because the attendance is imported at the end of the month and the
+ *    24th came too early for it. A recalculation re-decides from the
+ *    attendance as it stands then: a changed outcome reverses the previous
+ *    grant with an offsetting entry, or grants afresh. Once the month's
+ *    payroll is Approved, Disbursed or Locked the decision is fixed.
+ *
+ * ⚠ A cycle that has not ended yet is refused. Its lates are not all in.
  *
  * ⚠ The thresholds and the rate are policy data on the company-default
  * attendance policy, so HR revises them on the same screen as the ladders and
@@ -54,15 +67,16 @@ use Illuminate\Support\Facades\DB;
  * though: office and retail name their bands differently, and "ordinary" means
  * whichever band each employee's own policy lists first.
  *
- * Idempotent twice over: the decision row is unique per employee and month, and
- * the ledger entry carries a once-key. A rerun decides nothing twice.
+ * Idempotent twice over: the decision row is unique per employee, month and
+ * basis, and every ledger entry carries a once-key. A rerun that finds the
+ * same outcome writes nothing.
  */
 class AccrueMonthlyEarnedLeave
 {
     /**
-     * @return array{granted: int, withheld: int, skipped: int, days: float, reason: ?string, rows: array<int, array<string, mixed>>}
+     * @return array{granted: int, withheld: int, skipped: int, changed: int, frozen: bool, days: float, reason: ?string, rows: array<int, array<string, mixed>>}
      */
-    public function handle(int $year, int $month, bool $dryRun = false): array
+    public function handle(int $year, int $month, bool $dryRun = false, bool $redecide = false): array
     {
         // ⭐ 27 Oct 2026: the payroll cycle with this label, not the calendar month.
         [$monthStart, $monthEnd] = PayrollCycle::forMonth($year, $month);
@@ -94,14 +108,23 @@ class AccrueMonthlyEarnedLeave
         }
 
         $employees = $this->population($monthEnd);
+        $frozen = $this->isFrozen($year, $month);
 
         $granted = 0;
         $withheld = 0;
         $skipped = 0;
+        $changed = 0;
         $rows = [];
 
         foreach ($employees as $employee) {
-            if (EarnedLeaveAccrual::where('employee_id', $employee->id)->forMonth($year, $month)->exists()) {
+            $current = EarnedLeaveAccrual::where('employee_id', $employee->id)
+                ->forMonth($year, $month)
+                ->current()
+                ->first();
+
+            // Decided already and not open to a re-decision: a calendar row,
+            // a month whose payroll is approved, or a plain run of the job.
+            if ($current !== null && ! ($redecide && ! $frozen && $current->basis === EarnedLeaveAccrual::BASIS_CYCLE)) {
                 $skipped++;
 
                 continue;
@@ -120,33 +143,83 @@ class AccrueMonthlyEarnedLeave
                 ),
                 default => null,
             };
+            $days = $reason === null ? $accrual->daysPerMonth : 0.0;
+            $moved = $current !== null && round((float) $current->days_granted, 2) !== round($days, 2);
 
             $rows[] = [
                 'employee_code' => $employee->employee_code,
                 'employee' => $employee->fullName(),
                 'ordinary_lates' => $ordinary,
                 'serious_lates' => $serious,
-                'days' => $reason === null ? $accrual->daysPerMonth : 0.0,
+                'days' => $days,
                 'withheld_reason' => $reason,
+                'changed' => $moved,
+                'previous_days' => $current === null ? null : (float) $current->days_granted,
             ];
 
             $reason === null ? $granted++ : $withheld++;
+            $changed += $moved ? 1 : 0;
 
             if ($dryRun) {
                 continue;
             }
 
-            $this->record($employee, $earned, $year, $month, $monthStart, $monthEnd, $accrual, $ordinary, $serious, $reason);
+            $current === null
+                ? $this->record($employee, $earned, $year, $month, $monthStart, $monthEnd, $days, $ordinary, $serious, $reason)
+                : $this->redecide($current, $employee, $earned, $monthStart, $monthEnd, $days, $ordinary, $serious, $reason);
         }
 
         return [
             'granted' => $granted,
             'withheld' => $withheld,
             'skipped' => $skipped,
+            'changed' => $changed,
+            'frozen' => $frozen,
             'days' => round($granted * $accrual->daysPerMonth, 2),
             'reason' => null,
             'rows' => $rows,
         ];
+    }
+
+    /**
+     * ⭐ 27 Oct 2026: a decision stops counting. Its grant, if it still stands,
+     * is answered by an equal and opposite entry, and the row is marked
+     * superseded with the reason. Nothing is deleted: the ledger is
+     * append-only and the decision row is the record of what was decided.
+     *
+     * Idempotent: a superseded row is left alone, and the reversal is keyed
+     * on the grant it reverses.
+     */
+    public function supersede(EarnedLeaveAccrual $decision, string $reason): void
+    {
+        if ($decision->superseded_at !== null) {
+            return;
+        }
+
+        DB::transaction(function () use ($decision, $reason) {
+            $this->reverseGrant($decision, $reason);
+
+            $decision->update([
+                'leave_ledger_entry_id' => null,
+                'superseded_at' => now(),
+                'superseded_reason' => mb_substr($reason, 0, 250),
+            ]);
+        });
+    }
+
+    /**
+     * ⭐ 27 Oct 2026 (Joy): the decision is fixed once the month's payroll is
+     * approved. Read off every version of the period, so a locked payroll
+     * reopened by an unlock (its locked version stays Locked) keeps the
+     * decision it was paid with, while an approved one reopened as a new
+     * version (the old one is Cancelled) can be decided again.
+     */
+    public function isFrozen(int $year, int $month): bool
+    {
+        return PayrollRun::query()
+            ->whereHas('period', fn ($query) => $query->where('year', $year)->where('month', $month))
+            ->whereIn('status', [PayrollStatus::Approved, PayrollStatus::Disbursed, PayrollStatus::Locked])
+            ->exists();
     }
 
     /**
@@ -229,58 +302,164 @@ class AccrueMonthlyEarnedLeave
         int $month,
         Carbon $monthStart,
         Carbon $monthEnd,
-        ElAccrualConfig $accrual,
+        float $days,
         int $ordinary,
         int $serious,
         ?string $reason,
     ): void {
-        DB::transaction(function () use ($employee, $earned, $year, $month, $monthStart, $monthEnd, $accrual, $ordinary, $serious, $reason) {
-            EarnedLeaveAccrual::create([
+        DB::transaction(function () use ($employee, $earned, $year, $month, $monthStart, $monthEnd, $days, $ordinary, $serious, $reason) {
+            $decision = EarnedLeaveAccrual::create([
                 'employee_id' => $employee->id,
                 'year' => $year,
                 'month' => $month,
-                'days_granted' => $reason === null ? $accrual->daysPerMonth : 0,
+                'basis' => EarnedLeaveAccrual::BASIS_CYCLE,
+                'days_granted' => $days,
                 'withheld_reason' => $reason,
                 'ordinary_lates' => $ordinary,
                 'serious_lates' => $serious,
             ]);
 
-            if ($reason !== null) {
-                // Withheld months write no ledger entry - a balance may only
-                // move for days that were actually earned. The decision row
-                // above is where the reason lives.
-                return;
+            // Withheld months write no ledger entry - a balance may only move
+            // for days that were actually earned. The decision row is where
+            // the reason lives.
+            if ($reason === null) {
+                $this->grant($decision, $earned, $monthStart, $monthEnd, $days);
             }
-
-            LeaveLedgerEntry::once(
-                sprintf('el_accrual:%d:%d:%d', $year, $month, $employee->id),
-                [
-                    'employee_id' => $employee->id,
-                    'leave_type_id' => $earned->id,
-                    'year' => $year,
-                    'entry_type' => LeaveLedgerEntryType::Grant,
-                    'days' => $accrual->daysPerMonth,
-                    'occurred_on' => $monthEnd->toDateString(),
-                    'note' => sprintf(
-                        'Earned leave for %s (%s to %s): %s day(s). %d ordinary and %d serious lates, within the allowance.',
-                        $monthEnd->format('F Y'),
-                        $monthStart->format('j M'),
-                        $monthEnd->format('j M Y'),
-                        rtrim(rtrim(number_format($accrual->daysPerMonth, 2), '0'), '.'),
-                        $ordinary,
-                        $serious,
-                    ),
-                    'created_by' => Auth::id(),
-                ],
-            );
         });
     }
 
     /**
-     * @return array{granted: int, withheld: int, skipped: int, days: float, reason: ?string, rows: array<int, array<string, mixed>>}
+     * ⭐ 27 Oct 2026: payroll for the month was calculated again. The row is
+     * brought up to the attendance as it stands now, and the ledger follows
+     * only when the days changed: the standing grant is reversed, and a
+     * granted outcome is posted afresh under its own key.
+     */
+    private function redecide(
+        EarnedLeaveAccrual $decision,
+        Employee $employee,
+        LeaveType $earned,
+        Carbon $monthStart,
+        Carbon $monthEnd,
+        float $days,
+        int $ordinary,
+        int $serious,
+        ?string $reason,
+    ): void {
+        $unchanged = round((float) $decision->days_granted, 2) === round($days, 2)
+            && $decision->withheld_reason === $reason
+            && $decision->ordinary_lates === $ordinary
+            && $decision->serious_lates === $serious;
+
+        if ($unchanged) {
+            return;
+        }
+
+        DB::transaction(function () use ($decision, $earned, $monthStart, $monthEnd, $days, $ordinary, $serious, $reason) {
+            $daysMoved = round((float) $decision->days_granted, 2) !== round($days, 2);
+
+            if ($daysMoved) {
+                $this->reverseGrant($decision, sprintf(
+                    'Earned leave for %s taken back: payroll was calculated again and the month is now %s.',
+                    PayrollCycle::describe($decision->year, $decision->month),
+                    $reason === null ? 'granted at a different rate' : 'withheld. '.$reason,
+                ));
+                $decision->leave_ledger_entry_id = null;
+            }
+
+            $decision->fill([
+                'days_granted' => $days,
+                'withheld_reason' => $reason,
+                'ordinary_lates' => $ordinary,
+                'serious_lates' => $serious,
+            ])->save();
+
+            if ($daysMoved && $reason === null) {
+                $this->grant($decision, $earned, $monthStart, $monthEnd, $days);
+            }
+        });
+    }
+
+    /**
+     * ⚠ The cycle grants carry their own once-key family. The calendar grant
+     * for 2026 month 9 already holds `el_accrual:2026:9:{emp}`, and the cycle
+     * decision for the same label must be able to post next to its reversal.
+     * A grant after a reversal takes the next number, so a month that flips
+     * back and forth leaves one entry per flip, each posted once.
+     */
+    private function grant(EarnedLeaveAccrual $decision, LeaveType $earned, Carbon $monthStart, Carbon $monthEnd, float $days): void
+    {
+        $base = sprintf('el_accrual:cycle:%d:%d:%d', $decision->year, $decision->month, $decision->employee_id);
+        $earlier = LeaveLedgerEntry::where(fn ($query) => $query
+            ->where('source_key', $base)
+            ->orWhere('source_key', 'like', $base.':%'))
+            ->count();
+
+        $entry = LeaveLedgerEntry::once($earlier === 0 ? $base : $base.':'.($earlier + 1), [
+            'employee_id' => $decision->employee_id,
+            'leave_type_id' => $earned->id,
+            'year' => $decision->year,
+            'entry_type' => LeaveLedgerEntryType::Grant,
+            'days' => $days,
+            'occurred_on' => $monthEnd->toDateString(),
+            'note' => sprintf(
+                'Earned leave for %s (%s to %s): %s day(s). %d ordinary and %d serious lates, within the allowance.',
+                $monthEnd->format('F Y'),
+                $monthStart->format('j M'),
+                $monthEnd->format('j M Y'),
+                rtrim(rtrim(number_format($days, 2), '0'), '.'),
+                $decision->ordinary_lates,
+                $decision->serious_lates,
+            ),
+            'reference_type' => $decision->getMorphClass(),
+            'reference_id' => $decision->id,
+            'created_by' => Auth::id(),
+        ]);
+
+        $decision->update(['leave_ledger_entry_id' => $entry?->id]);
+    }
+
+    /**
+     * An equal and opposite entry for the grant that still stands, dated the
+     * day it is taken back. Filed as an adjustment, so the leave register
+     * reads it off what the employee GOT, not off what they used.
+     */
+    private function reverseGrant(EarnedLeaveAccrual $decision, string $note): void
+    {
+        $grant = $decision->leave_ledger_entry_id === null
+            ? null
+            : LeaveLedgerEntry::find($decision->leave_ledger_entry_id);
+
+        // A calendar grant posted before decisions pointed at their entries
+        // is found by the once-key it was posted under.
+        if ($grant === null && $decision->basis === EarnedLeaveAccrual::BASIS_CALENDAR && (float) $decision->days_granted > 0) {
+            $grant = LeaveLedgerEntry::where('source_key', sprintf(
+                'el_accrual:%d:%d:%d', $decision->year, $decision->month, $decision->employee_id,
+            ))->first();
+        }
+
+        if ($grant === null) {
+            return;
+        }
+
+        LeaveLedgerEntry::once('el_accrual_reversal:'.$grant->id, [
+            'employee_id' => $grant->employee_id,
+            'leave_type_id' => $grant->leave_type_id,
+            'year' => $grant->year,
+            'entry_type' => LeaveLedgerEntryType::Adjustment,
+            'days' => -1 * (float) $grant->days,
+            'occurred_on' => Carbon::today()->toDateString(),
+            'note' => mb_substr($note, 0, 250),
+            'reference_type' => $decision->getMorphClass(),
+            'reference_id' => $decision->id,
+            'created_by' => Auth::id(),
+        ]);
+    }
+
+    /**
+     * @return array{granted: int, withheld: int, skipped: int, changed: int, frozen: bool, days: float, reason: ?string, rows: array<int, array<string, mixed>>}
      */
     private function empty(string $reason): array
     {
-        return ['granted' => 0, 'withheld' => 0, 'skipped' => 0, 'days' => 0.0, 'reason' => $reason, 'rows' => []];
+        return ['granted' => 0, 'withheld' => 0, 'skipped' => 0, 'changed' => 0, 'frozen' => false, 'days' => 0.0, 'reason' => $reason, 'rows' => []];
     }
 }
