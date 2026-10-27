@@ -264,6 +264,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('leave/{leaveRequest}/reject', [LeaveController::class, 'reject'])->name('leave.reject');
     // The authority pays the unpaid days of an approved leave (Joy, 27 Sep 2026).
     Route::post('leave/{leaveRequest}/grant-paid', [LeaveController::class, 'grantPaid'])->name('leave.grant-paid');
+    // ⭐ 27 Oct 2026 (Joy): the pay on an approved leave, decided apart from approving it.
+    Route::post('leave/{leaveRequest}/pay', [LeaveController::class, 'decidePay'])->name('leave.pay');
     // ⭐ Corrections wave 3 (24 Oct 2026): Cancel an approved leave (days back).
     Route::post('leave/{leaveRequest}/cancel', [LeaveController::class, 'cancel'])->whereNumber('leaveRequest')->name('leave.cancel');
     Route::post('leave/quota', [LeaveController::class, 'grantQuota'])->name('leave.quota');

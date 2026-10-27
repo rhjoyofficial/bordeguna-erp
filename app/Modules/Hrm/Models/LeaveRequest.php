@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -88,6 +89,12 @@ class LeaveRequest extends Model implements WithdrawsFromApproval
     public function requester(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    /** ⭐ 27 Oct 2026: every pay decision on this leave, oldest first (DecideLeavePay). */
+    public function payDecisions(): HasMany
+    {
+        return $this->hasMany(LeavePayDecision::class)->orderBy('id');
     }
 
     public function paidOverrideBy(): BelongsTo

@@ -119,7 +119,7 @@ class ApprovalInbox
                 CropWriteOff::class => ['cropAccount', 'lossAccount', 'createdBy:id,name'],
                 ChangeRequest::class => ['subject', 'requestedBy:id,name'],
                 AttendanceCorrection::class => ['employee:id,employee_code,first_name,last_name', 'punch:id,punched_at'],
-                LeaveRequest::class => ['employee:id,employee_code,first_name,last_name', 'leaveType:id,name'],
+                LeaveRequest::class => ['employee:id,employee_code,first_name,last_name', 'leaveType:id,name,is_paid,deducts_balance'],
                 Movement::class => ['employee:id,employee_code,first_name,last_name'],
                 PayrollRun::class => ['period'],
                 PayrollUnlockRequest::class => ['run.period'],

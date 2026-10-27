@@ -165,6 +165,39 @@ class CancelLeaveRequest
             $total += $days;
         }
 
+        // ⭐ 27 Oct 2026: a pay decision moved days too (given back when made
+        // unpaid, drawn when made paid). Each is answered by its opposite, so
+        // the leave's rows net to zero and the balance is as if it never was.
+        $decisions = LeaveLedgerEntry::query()
+            ->where('reference_type', $leave->getMorphClass())
+            ->where('reference_id', $leave->id)
+            ->where('entry_type', LeaveLedgerEntryType::PayDecision)
+            ->orderBy('id')
+            ->get();
+
+        foreach ($decisions as $entry) {
+            $days = round(-(float) $entry->days, 2);
+
+            if (abs($days) < 0.001) {
+                continue;
+            }
+
+            LeaveLedgerEntry::once("leave_cancel:{$entry->id}", [
+                'employee_id' => $entry->employee_id,
+                'leave_type_id' => $entry->leave_type_id,
+                'year' => $entry->year,
+                'entry_type' => LeaveLedgerEntryType::PayDecision,
+                'days' => $days,
+                'occurred_on' => Carbon::parse($entry->occurred_on)->toDateString(),
+                'note' => 'Cancelled, pay decision undone: '.$leave->summaryLine(),
+                'reference_type' => $leave->getMorphClass(),
+                'reference_id' => $leave->id,
+                'created_by' => $by->id,
+            ]);
+
+            $total += $days;
+        }
+
         return round($total, 2);
     }
 

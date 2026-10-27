@@ -37,6 +37,65 @@ interface ApprovalCard {
     send_back_url: string | null;
     /** Rule #22: the viewer would be approving their own money; a reason is required. */
     self_approval: boolean;
+    /** ⭐ 27 Oct 2026: a leave's pay, choosable at the last approval by someone who manages leave. */
+    pay_choice?: { days: number; unpaid_days: number; half_day: boolean } | null;
+}
+
+/**
+ * ⭐ 27 Oct 2026 (Joy): the approver may choose the pay as they approve. Left on
+ * "As the leave type and balance say", nothing extra is sent and approval means
+ * exactly what it always did; HR can still decide the pay afterwards.
+ */
+function PayChoice({
+    choice,
+    unpaid,
+    setUnpaid,
+    reason,
+    setReason,
+}: {
+    choice: NonNullable<ApprovalCard['pay_choice']>;
+    unpaid: string;
+    setUnpaid: (value: string) => void;
+    reason: string;
+    setReason: (value: string) => void;
+}) {
+    const { t } = useTranslation();
+    // Every half-day step strictly between Paid and Unpaid: 0.5, 1, ... days - 0.5.
+    const halves = Array.from({ length: Math.max(0, Math.round(choice.days * 2) - 1) }, (_, i) => (i + 1) / 2);
+
+    return (
+        <div className="mt-3 flex flex-wrap items-end gap-2 text-sm">
+            <label className="grid gap-1">
+                <span className="text-muted-foreground text-xs">{t('pay.card_label')}</span>
+                <select
+                    className="border-input bg-background h-8 w-fit rounded-md border px-2 text-sm"
+                    value={unpaid}
+                    onChange={(e) => setUnpaid(e.target.value)}
+                >
+                    <option value="">{t('pay.card_as_rules')}</option>
+                    <option value="0">{t('pay.paid')}</option>
+                    <option value={String(choice.days)}>{t('pay.unpaid')}</option>
+                    {halves.map((d) => (
+                        <option key={d} value={String(d)}>
+                            {`${t('pay.part')}: ${d} / ${choice.days}`}
+                        </option>
+                    ))}
+                </select>
+            </label>
+            {unpaid !== '' && (
+                <label className="grid gap-1">
+                    <span className="text-muted-foreground text-xs">{t('pay.card_reason_needed')}</span>
+                    <input
+                        className="border-input bg-background h-8 w-64 rounded-md border px-2 text-sm"
+                        aria-required="true"
+                        value={reason}
+                        placeholder={t('pay.reason_placeholder')}
+                        onChange={(e) => setReason(e.target.value)}
+                    />
+                </label>
+            )}
+        </div>
+    );
 }
 
 interface ApprovalsIndexProps {
@@ -141,10 +200,16 @@ function RequestCard({ card }: { card: ApprovalCard }) {
         onFinish: () => setProcessing(false),
     };
 
+    // ⭐ 27 Oct 2026: a leave's pay chosen on the card ('' = as the rules say).
+    const [payUnpaid, setPayUnpaid] = useState('');
+    const [payReason, setPayReason] = useState('');
+    const payMissingReason = payUnpaid !== '' && payReason.trim() === '';
+
     // Rule #22 (14 Oct 2026): a self-approval carries its reason as the note.
     const approve = (note?: string) => {
         if (card.approve_url) {
-            router.post(card.approve_url, note ? { note } : {}, options);
+            const pay = payUnpaid === '' ? {} : { pay_unpaid_days: Number(payUnpaid), pay_reason: payReason };
+            router.post(card.approve_url, { ...(note ? { note } : {}), ...pay }, options);
         }
     };
 
@@ -184,7 +249,11 @@ function RequestCard({ card }: { card: ApprovalCard }) {
                     {card.approve_url && (
                         <ConfirmDialog
                             trigger={
-                                <Button size="sm" disabled={processing}>
+                                <Button
+                                    size="sm"
+                                    disabled={processing || payMissingReason}
+                                    title={payMissingReason ? t('pay.card_reason_needed') : undefined}
+                                >
                                     {processing ? 'Working…' : 'Approve'}
                                 </Button>
                             }
@@ -243,6 +312,10 @@ function RequestCard({ card }: { card: ApprovalCard }) {
                         </div>
                     ))}
                 </dl>
+            )}
+
+            {card.pay_choice && card.approve_url && (
+                <PayChoice choice={card.pay_choice} unpaid={payUnpaid} setUnpaid={setPayUnpaid} reason={payReason} setReason={setPayReason} />
             )}
 
             {card.lines.length > 0 && (

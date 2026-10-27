@@ -36,8 +36,9 @@ class LeaveBalance
 
         $taken = LeaveLedgerEntry::where('employee_id', $employeeId)
             ->forYear($year)
-            // A cancelled leave's give-back nets off what it took (wave 3).
-            ->whereIn('entry_type', ['taken', 'cancelled'])
+            // A cancelled leave's give-back nets off what it took (wave 3),
+            // and so does a pay decision's (27 Oct 2026).
+            ->whereIn('entry_type', ['taken', 'cancelled', 'pay_decision'])
             ->selectRaw('leave_type_id, sum(days) as total')
             ->groupBy('leave_type_id')
             ->pluck('total', 'leave_type_id');

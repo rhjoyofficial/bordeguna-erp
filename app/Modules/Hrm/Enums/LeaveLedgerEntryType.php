@@ -29,6 +29,13 @@ enum LeaveLedgerEntryType: string
      * off (LeaveBalance::summaryFor).
      */
     case Cancelled = 'cancelled';
+    /**
+     * ⭐ 27 Oct 2026 (Joy): the pay decision on an approved leave moved its
+     * days. Positive: days made unpaid went back to the balance. Negative:
+     * days made paid were drawn from it. A cancellation answers each one with
+     * an opposite row, so the leave's rows still net to zero.
+     */
+    case PayDecision = 'pay_decision';
     case Lapse = 'lapse';
     case Encashment = 'encashment';
     case Adjustment = 'adjustment';
@@ -41,6 +48,7 @@ enum LeaveLedgerEntryType: string
             self::CompensatoryCredit => 'Earned by working a holiday',
             self::Taken => 'Leave taken',
             self::Cancelled => 'Leave cancelled, days given back',
+            self::PayDecision => 'Pay decision on a leave',
             self::Lapse => 'Lapsed above the carry-forward cap',
             self::Encashment => 'Encashed',
             self::Adjustment => 'Manual adjustment',

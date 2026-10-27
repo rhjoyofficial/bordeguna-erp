@@ -48,6 +48,7 @@ import { ownerSales } from './i18n/owner-sales';
 import { ownerWithdrawals } from './i18n/owner-withdrawals';
 import { parties } from './i18n/parties';
 import { partyLedgers } from './i18n/party-ledgers';
+import { payDecisions } from './i18n/pay-decisions';
 import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
 import { ipFamilies } from './i18n/product-families';
@@ -775,6 +776,7 @@ const dictionary = {
     ...whoOwesWhat,
     ...takeOff,
     ...earlyLeave,
+    ...payDecisions,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

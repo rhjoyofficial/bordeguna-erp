@@ -10,6 +10,7 @@ use App\Modules\Hrm\Actions\ApplyLeave;
 use App\Modules\Hrm\Actions\ApplyMovement;
 use App\Modules\Hrm\Actions\CancelLeaveRequest;
 use App\Modules\Hrm\Actions\CancelMovement;
+use App\Modules\Hrm\Actions\DecideLeavePay;
 use App\Modules\Hrm\Actions\GrantAnnualLeaveQuota;
 use App\Modules\Hrm\Actions\GrantPaidLeaveOverride;
 use App\Modules\Hrm\Actions\RequestLeave;
@@ -21,6 +22,7 @@ use App\Modules\Hrm\Corrections\MovementActionPolicy;
 use App\Modules\Hrm\Enums\LeaveDayPortion;
 use App\Modules\Hrm\Enums\MovementType;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\LeavePayDecision;
 use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Models\LeaveType;
 use App\Modules\Hrm\Models\LeaveYearEndRun;
@@ -33,6 +35,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use InvalidArgumentException;
@@ -56,7 +59,7 @@ class LeaveController extends Controller
         return Inertia::render('hrm/leave/index', [
             'year' => $year,
             'filters' => ['employee_id' => $employeeId],
-            'requests' => LeaveRequest::with(['employee:id,employee_code,first_name,last_name', 'leaveType:id,name', 'approvalRequest.workflow.stages'])
+            'requests' => LeaveRequest::with(['employee:id,employee_code,first_name,last_name', 'leaveType:id,name,is_paid,deducts_balance', 'approvalRequest.workflow.stages', 'payDecisions.decider:id,name'])
                 ->when($employeeId, fn ($q) => $q->where('employee_id', $employeeId))
                 ->orderByDesc('id')->limit(100)->get()
                 ->map(fn (LeaveRequest $r) => $this->presentLeave($r)),
@@ -183,23 +186,46 @@ class LeaveController extends Controller
         return back()->with('success', 'Leave requested.');
     }
 
-    public function approve(Request $request, LeaveRequest $leaveRequest, ApplyLeave $apply, NotifyStageApprovers $notify): RedirectResponse
+    public function approve(Request $request, LeaveRequest $leaveRequest, ApplyLeave $apply, NotifyStageApprovers $notify, DecideLeavePay $decidePay): RedirectResponse
     {
         $approval = $leaveRequest->approvalRequest;
         abort_if($approval === null, 404);
         abort_unless($approval->canBeActionedBy($request->user()), 403);
 
-        $note = $request->validate(['note' => ['nullable', 'string', 'max:500']])['note'] ?? null;
+        $validated = $request->validate([
+            'note' => ['nullable', 'string', 'max:500'],
+            // ⭐ 27 Oct 2026 (Joy): the approver may choose the pay as they
+            // approve. Optional; left out, the leave type and balance decide,
+            // exactly as before. Approval itself means what it always meant.
+            'pay_unpaid_days' => ['nullable', 'numeric', 'min:0'],
+            'pay_reason' => ['nullable', 'required_with:pay_unpaid_days', 'string', 'max:1000'],
+        ]);
+        $note = $validated['note'] ?? null;
+        $payChoice = isset($validated['pay_unpaid_days']) ? (float) $validated['pay_unpaid_days'] : null;
+
+        if ($payChoice !== null) {
+            if (! $request->user()->can('hrm.leave.manage')) {
+                throw ValidationException::withMessages(['pay_unpaid_days' => 'Only someone who manages leave can choose the pay. Approve without it, and HR decides the pay afterwards.']);
+            }
+
+            if ($approval->remainingStages() > 1) {
+                throw ValidationException::withMessages(['pay_unpaid_days' => 'The pay is chosen at the last approval. Approve without it here.']);
+            }
+        }
 
         // ⚠⚠ The final approval and applying it are one transaction, as in
         // LoanController::approve. Committed apart, a failure while applying
         // left the request approved and the decision never carried out.
-        $complete = DB::transaction(function () use ($approval, $request, $note, $apply, $leaveRequest) {
+        $complete = DB::transaction(function () use ($approval, $request, $note, $apply, $leaveRequest, $payChoice, $validated, $decidePay) {
             if (! $approval->approve($request->user(), $note)) {
                 return false;
             }
 
-            $apply->handle($leaveRequest);
+            $applied = $apply->handle($leaveRequest);
+
+            if ($payChoice !== null && abs($payChoice - (float) $applied->unpaid_days) > 0.001) {
+                $decidePay->handle($applied, $request->user(), $payChoice, (string) $validated['pay_reason'], atApproval: true);
+            }
 
             return true;
         });
@@ -210,7 +236,28 @@ class LeaveController extends Controller
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
 
-        return back()->with('success', 'Leave approved and the balance updated.');
+        $fresh = $leaveRequest->fresh();
+
+        return back()->with('success', 'Leave approved and the balance updated. Pay: '.DecideLeavePay::label((float) $fresh->days, (float) $fresh->unpaid_days).'.');
+    }
+
+    /**
+     * ⭐ 27 Oct 2026 (Joy): the pay decision on an approved leave, on its own,
+     * separate from the approval: Paid, Unpaid, or some days unpaid in
+     * half-day steps, with a reason. Same power as paying unpaid days.
+     */
+    public function decidePay(Request $request, LeaveRequest $leaveRequest, DecideLeavePay $action): RedirectResponse
+    {
+        $this->authorize('hrm.leave.manage');
+
+        $validated = $request->validate([
+            'unpaid_days' => ['required', 'numeric', 'min:0'],
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $leave = $action->handle($leaveRequest, $request->user(), (float) $validated['unpaid_days'], $validated['reason']);
+
+        return back()->with('success', 'Pay decided: '.DecideLeavePay::label((float) $leave->days, (float) $leave->unpaid_days).'. Recalculate the payroll for those days so the payslip follows.');
     }
 
     public function reject(Request $request, LeaveRequest $leaveRequest): RedirectResponse
@@ -427,6 +474,20 @@ class LeaveController extends Controller
             'is_applied' => $r->isApplied(),
             'paid_by_authority' => $r->isPaidByAuthority(),
             'paid_override_reason' => $r->paid_override_reason,
+            // ⭐ 27 Oct 2026: the pay decision, apart from the approval.
+            'pay_label' => DecideLeavePay::label((float) $r->days, (float) $r->unpaid_days),
+            'deducts_balance' => (bool) $r->leaveType?->deducts_balance,
+            'pay_blocked' => $r->isApplied() && ! $r->isCancelled() ? DecideLeavePay::refusal($r) : null,
+            'pay_history' => $r->payDecisions->map(fn (LeavePayDecision $d) => [
+                'from' => DecideLeavePay::label((float) $r->days, (float) $d->unpaid_days_before),
+                'to' => DecideLeavePay::label((float) $r->days, (float) $d->unpaid_days_after),
+                'quota_days' => (float) $d->quota_days,
+                'granted_days' => (float) $d->granted_days,
+                'at_approval' => $d->at_approval,
+                'reason' => $d->reason,
+                'by' => $d->decider?->name,
+                'at' => $d->created_at?->format('d/m/Y H:i'),
+            ])->values(),
             // ⭐ Corrections wave 3: cancelled after approval, and the buttons.
             'cancelled_at' => $r->cancelled_at?->format('d/m/Y'),
             'cancel_reason' => $r->cancel_reason,

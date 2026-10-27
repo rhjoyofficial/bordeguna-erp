@@ -39,10 +39,27 @@ interface LeaveRow {
     is_applied: boolean;
     paid_by_authority: boolean;
     paid_override_reason: string | null;
+    // ⭐ 27 Oct 2026 (Joy): the pay decision, apart from the approval.
+    pay_label: string;
+    deducts_balance: boolean;
+    /** Why the pay can no longer change (payroll closed), or null. */
+    pay_blocked: string | null;
+    pay_history: PayHistory[];
     // ⭐ Corrections wave 3 (24 Oct 2026): Cancel after approval.
     cancelled_at: string | null;
     cancel_reason: string | null;
     actions: HrActions;
+}
+
+interface PayHistory {
+    from: string;
+    to: string;
+    quota_days: number;
+    granted_days: number;
+    at_approval: boolean;
+    reason: string;
+    by: string | null;
+    at: string | null;
 }
 
 interface MovementRow {
@@ -583,50 +600,105 @@ function LeaveTypeDialog({ type }: { type?: TypeSetting }) {
 }
 
 /**
- * The authority pays the unpaid days of an approved leave, even when the
- * employee had no paid balance (Joy, 27 Sep 2026). A reason is required, so the
- * grant is always accountable.
+ * ⭐ 27 Oct 2026 (Joy): the pay on an approved leave, decided apart from the
+ * approval. Paid, Unpaid, or some days unpaid in half-day steps, with a reason.
+ * Replaces "Pay these days" (27 Sep 2026), which is now its Paid choice.
  */
-function GrantPaidDialog({ leave }: { leave: LeaveRow }) {
+function PayDecisionDialog({ leave }: { leave: LeaveRow }) {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
+    const initialMode = leave.unpaid_days <= 0 ? 'paid' : leave.unpaid_days >= leave.days ? 'unpaid' : 'part';
+    const [mode, setMode] = useState<'paid' | 'unpaid' | 'part'>(initialMode);
+    const [part, setPart] = useState(String(leave.unpaid_days > 0 && leave.unpaid_days < leave.days ? leave.unpaid_days : 0.5));
     const [reason, setReason] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [busy, setBusy] = useState(false);
+
+    const unpaid = mode === 'paid' ? 0 : mode === 'unpaid' ? leave.days : Number(part);
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+            open={open}
+            onOpenChange={(next) => {
+                setOpen(next);
+                if (next) {
+                    setMode(initialMode);
+                    setErrors({});
+                }
+            }}
+        >
             <DialogTrigger asChild>
                 <Button size="sm" variant="outline">
-                    Pay these days
+                    {t('pay.button')}
                 </Button>
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Pay this leave</DialogTitle>
-                    <DialogDescription>
-                        {leave.unpaid_days} unpaid day{leave.unpaid_days === 1 ? '' : 's'} will be paid as a company grant. No leave balance is used,
-                        and the Leave Without Pay deduction is removed from the salary. Recalculate payroll afterwards.
-                    </DialogDescription>
+                    <DialogTitle>{t('pay.title')}</DialogTitle>
+                    <DialogDescription>{t('pay.intro', { name: leave.employee ?? '', days: leave.days, now: leave.pay_label })}</DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-2">
-                    <Label htmlFor={`paid-reason-${leave.id}`} required>
-                        Reason
-                    </Label>
-                    <Input id={`paid-reason-${leave.id}`} aria-required="true" value={reason} onChange={(e) => setReason(e.target.value)} />
-                    {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
-                    {errors.status && <p className="text-destructive text-xs">{errors.status}</p>}
+                <div className="grid gap-3">
+                    <div className="flex flex-wrap gap-3 text-sm" role="radiogroup" aria-label={t('pay.title')}>
+                        {(['paid', 'unpaid', 'part'] as const)
+                            .filter((m) => m !== 'part' || leave.days > 0.5)
+                            .map((m) => (
+                                <label key={m} className="inline-flex items-center gap-1.5">
+                                    <input type="radio" name={`pay-mode-${leave.id}`} checked={mode === m} onChange={() => setMode(m)} />
+                                    {t(m === 'paid' ? 'pay.paid' : m === 'unpaid' ? 'pay.unpaid' : 'pay.part')}
+                                </label>
+                            ))}
+                    </div>
+                    {mode === 'part' && (
+                        <div className="grid gap-1">
+                            <Label htmlFor={`pay-days-${leave.id}`}>{t('pay.unpaid_days')}</Label>
+                            <Input
+                                id={`pay-days-${leave.id}`}
+                                type="number"
+                                className="w-24"
+                                min={0.5}
+                                max={leave.days - 0.5}
+                                step={0.5}
+                                value={part}
+                                onChange={(e) => setPart(e.target.value)}
+                            />
+                        </div>
+                    )}
+                    {errors.unpaid_days && <p className="text-destructive text-xs">{errors.unpaid_days}</p>}
+                    <p className="text-muted-foreground text-xs">
+                        {leave.deducts_balance
+                            ? t('pay.balance_note', { type: leave.leave_type ?? '' })
+                            : t('pay.grant_note', { type: leave.leave_type ?? '' })}{' '}
+                        {t('pay.payroll_note')}
+                    </p>
+                    <div className="grid gap-1">
+                        <Label htmlFor={`pay-reason-${leave.id}`} required>
+                            {t('pay.reason')}
+                        </Label>
+                        <Input
+                            id={`pay-reason-${leave.id}`}
+                            aria-required="true"
+                            placeholder={t('pay.reason_placeholder')}
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                        />
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
+                        {errors.status && <p className="text-destructive text-xs">{errors.status}</p>}
+                    </div>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button variant="outline">{t('pay.cancel')}</Button>
                     </DialogClose>
                     <Button
-                        disabled={reason.trim() === ''}
+                        disabled={busy || reason.trim() === '' || Number.isNaN(unpaid)}
                         onClick={() =>
                             router.post(
-                                route('hrm.leave.grant-paid', leave.id),
-                                { reason },
+                                route('hrm.leave.pay', leave.id),
+                                { unpaid_days: unpaid, reason },
                                 {
                                     preserveScroll: true,
+                                    onStart: () => setBusy(true),
+                                    onFinish: () => setBusy(false),
                                     onError: (e: Record<string, string>) => setErrors(e),
                                     onSuccess: () => {
                                         setOpen(false);
@@ -637,11 +709,38 @@ function GrantPaidDialog({ leave }: { leave: LeaveRow }) {
                             )
                         }
                     >
-                        Pay these days
+                        {t('pay.save')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+/** Who decided the pay, when and why: newest first, under the Days figure. */
+function PayHistoryList({ history }: { history: PayHistory[] }) {
+    const { t } = useTranslation();
+
+    if (history.length === 0) {
+        return null;
+    }
+
+    return (
+        <details className="mt-0.5 text-xs">
+            <summary className="text-muted-foreground cursor-pointer">{t('pay.history')}</summary>
+            <ul className="mt-1 grid gap-1">
+                {[...history].reverse().map((h, i) => (
+                    <li key={i} className="text-muted-foreground">
+                        {t('pay.history_line', { from: h.from, to: h.to })}
+                        {h.at_approval && ` (${t('pay.at_approval')})`}
+                        {h.quota_days > 0 && `; ${t('pay.quota_back', { days: h.quota_days })}`}
+                        {h.quota_days < 0 && `; ${t('pay.quota_drawn', { days: -h.quota_days })}`}
+                        {h.granted_days > 0 && `; ${t('pay.granted', { days: h.granted_days })}`}
+                        {`. ${h.reason} (${t('pay.decided_by', { by: h.by ?? '', at: h.at ?? '' })})`}
+                    </li>
+                ))}
+            </ul>
+        </details>
     );
 }
 
@@ -782,14 +881,29 @@ export default function LeaveIndex({
                                                 </td>
                                                 <td className="py-1.5">
                                                     {r.days}
-                                                    {r.unpaid_days > 0 && (
-                                                        <span className="text-destructive ml-1 text-xs">({r.unpaid_days} unpaid)</span>
-                                                    )}
+                                                    <span
+                                                        className={
+                                                            r.unpaid_days > 0
+                                                                ? 'text-destructive ml-1 text-xs'
+                                                                : 'ml-1 text-xs text-emerald-600 dark:text-emerald-400'
+                                                        }
+                                                    >
+                                                        ({r.pay_label})
+                                                    </span>
                                                     {r.paid_by_authority && (
                                                         <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">
                                                             (paid by authority)
                                                         </span>
                                                     )}
+                                                    {r.pay_history.length > 0 && (
+                                                        <span className="text-muted-foreground block text-xs">
+                                                            {t('pay.decided_by', {
+                                                                by: r.pay_history[r.pay_history.length - 1].by ?? '',
+                                                                at: r.pay_history[r.pay_history.length - 1].at ?? '',
+                                                            })}
+                                                        </span>
+                                                    )}
+                                                    <PayHistoryList history={r.pay_history} />
                                                 </td>
                                                 <td className="text-muted-foreground py-1.5 text-xs">{r.reason}</td>
                                                 <td className="py-1.5">
@@ -811,7 +925,15 @@ export default function LeaveIndex({
                                                 </td>
                                                 <td className="py-1.5 text-right">
                                                     <span className="inline-flex flex-wrap items-start justify-end gap-2">
-                                                        {r.is_applied && !r.cancelled_at && r.unpaid_days > 0 && <GrantPaidDialog leave={r} />}
+                                                        {r.is_applied &&
+                                                            !r.cancelled_at &&
+                                                            (r.pay_blocked === null ? (
+                                                                <PayDecisionDialog leave={r} />
+                                                            ) : (
+                                                                <Button size="sm" variant="outline" disabled title={r.pay_blocked}>
+                                                                    {t('pay.button')}
+                                                                </Button>
+                                                            ))}
                                                         <HrCorrectionActions
                                                             kind="leave"
                                                             id={r.id}

@@ -55,25 +55,7 @@ class ApplyLeave
         // each leave year for its own days, one ledger entry per year, each
         // capped by that year's own balance. The first year keeps the original
         // key, so a leave applied before this change is never charged again.
-        $intendedPaid = round((float) $request->days - (float) $request->unpaid_days, 2);
-        $byYear = app(LeaveDayCalculator::class)->daysByYear($request->covered_dates ?? [], (float) $request->days);
-
-        if ($byYear === []) {
-            $byYear = [(int) Carbon::parse($request->start_date)->year => (float) $request->days];
-        }
-
-        $charges = [];
-        $remaining = $intendedPaid;
-
-        foreach ($byYear as $year => $yearDays) {
-            $available = max(0.0, app(LeaveBalance::class)->for($request->employee_id, $request->leave_type_id, $year));
-            $charge = round(max(0.0, min($yearDays, $available, $remaining)), 2);
-            $charges[$year] = $charge;
-            $remaining = round($remaining - $charge, 2);
-        }
-
-        $paidDays = round(array_sum($charges), 2);
-        $newUnpaid = round((float) $request->days - $paidDays, 2);
+        ['by_year' => $byYear, 'charges' => $charges, 'unpaid' => $newUnpaid] = $this->plan($request);
 
         if (abs($newUnpaid - (float) $request->unpaid_days) > 0.001) {
             $request->update(['unpaid_days' => $newUnpaid]);
@@ -103,6 +85,39 @@ class ApplyLeave
                 'created_by' => Auth::id(),
             ]);
         }
+    }
+
+    /**
+     * What approving would charge, year by year, and the unpaid days that
+     * leaves. ⭐ 27 Oct 2026: public so the approval card can show the pay that
+     * WILL apply before anyone says yes, from this one computation.
+     *
+     * @return array{by_year: array<int, float>, charges: array<int, float>, unpaid: float}
+     */
+    public function plan(LeaveRequest $request): array
+    {
+        $intendedPaid = round((float) $request->days - (float) $request->unpaid_days, 2);
+        $byYear = app(LeaveDayCalculator::class)->daysByYear($request->covered_dates ?? [], (float) $request->days);
+
+        if ($byYear === []) {
+            $byYear = [(int) Carbon::parse($request->start_date)->year => (float) $request->days];
+        }
+
+        if (! $request->leaveType?->deducts_balance) {
+            return ['by_year' => $byYear, 'charges' => [], 'unpaid' => round((float) $request->unpaid_days, 2)];
+        }
+
+        $charges = [];
+        $remaining = $intendedPaid;
+
+        foreach ($byYear as $year => $yearDays) {
+            $available = max(0.0, app(LeaveBalance::class)->for($request->employee_id, $request->leave_type_id, $year));
+            $charge = round(max(0.0, min($yearDays, $available, $remaining)), 2);
+            $charges[$year] = $charge;
+            $remaining = round($remaining - $charge, 2);
+        }
+
+        return ['by_year' => $byYear, 'charges' => $charges, 'unpaid' => round((float) $request->days - array_sum($charges), 2)];
     }
 
     /**

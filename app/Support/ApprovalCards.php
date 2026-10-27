@@ -18,6 +18,8 @@ use App\Modules\Foundation\Corrections\Tk;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
 use App\Modules\Foundation\Models\CorrectionRequest;
+use App\Modules\Hrm\Actions\ApplyLeave;
+use App\Modules\Hrm\Actions\DecideLeavePay;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\BonusAward;
@@ -208,6 +210,10 @@ class ApprovalCards
         }
 
         if ($approvable instanceof LeaveRequest) {
+            $projectedUnpaid = $approvable->isApplied()
+                ? (float) $approvable->unpaid_days
+                : app(ApplyLeave::class)->plan($approvable)['unpaid'];
+
             return $this->card(
                 $approvalRequest,
                 type: 'Leave request',
@@ -222,6 +228,9 @@ class ApprovalCards
                     (float) $approvable->unpaid_days > 0
                         ? ['label' => 'Unpaid days', 'value' => $this->qty($approvable->unpaid_days).' (no balance left for these)']
                         : ['label' => 'Balance', 'value' => 'Covers the whole request'],
+                    // ⭐ 27 Oct 2026 (Joy): the pay that WILL apply if approved,
+                    // from the same computation approving runs (ApplyLeave::plan).
+                    ['label' => 'Pay if approved', 'value' => $this->leavePay($approvable, $projectedUnpaid)],
                 ]),
                 reason: $approvable->reason,
                 viewUrl: route('hrm.leave.index', array_filter([
@@ -230,6 +239,13 @@ class ApprovalCards
                 ])),
                 approveUrl: route('hrm.leave.approve', $approvable),
                 rejectUrl: route('hrm.leave.reject', $approvable),
+                // The approver who manages leave may choose the pay at the last
+                // stage; anyone else approves and HR decides it afterwards.
+                payChoice: $approvalRequest->isPending()
+                    && $approvalRequest->remainingStages() <= 1
+                    && auth()->user()?->can('hrm.leave.manage')
+                    ? ['days' => (float) $approvable->days, 'unpaid_days' => $projectedUnpaid, 'half_day' => true]
+                    : null,
             );
         }
 
@@ -1016,6 +1032,8 @@ class ApprovalCards
         // home would strand the request in a status nobody can clear. Expense
         // claims have that path, so they set it; nothing else does yet.
         ?string $sendBackUrl = null,
+        // ⭐ 27 Oct 2026: a leave's pay, choosable on the card (leave only).
+        ?array $payChoice = null,
     ): array {
         return [
             'id' => $approvalRequest->id,
@@ -1030,6 +1048,7 @@ class ApprovalCards
             'approve_url' => $approveUrl,
             'reject_url' => $rejectUrl,
             'send_back_url' => $sendBackUrl,
+            'pay_choice' => $payChoice,
             'requested_by' => $approvalRequest->requestedBy?->name,
             'requested_at' => $approvalRequest->created_at->diffForHumans(),
             'stage' => $approvalRequest->totalStages() > 1 ? $approvalRequest->currentStage()?->name : null,
@@ -1041,6 +1060,22 @@ class ApprovalCards
             // ...and once decided, the visible mark in the history.
             'self_approved' => $approvalRequest->decisions->contains(fn ($decision) => (bool) $decision->self_approved),
         ];
+    }
+
+    /**
+     * "Paid", "Unpaid (Unpaid Leave)", "2 of 3 days unpaid: Sick Leave balance
+     * covers 1". The approver reads money before saying yes.
+     */
+    private function leavePay(LeaveRequest $leave, float $unpaid): string
+    {
+        $label = DecideLeavePay::label((float) $leave->days, $unpaid);
+        $type = $leave->leaveType;
+
+        if ($type !== null && ! $type->deducts_balance) {
+            return $label.($type->is_paid ? " ({$type->name} is a paid type)" : " ({$type->name} is unpaid)");
+        }
+
+        return $unpaid > 0 ? $label.' (the balance does not cover the rest)' : $label.' (from the balance)';
     }
 
     /**

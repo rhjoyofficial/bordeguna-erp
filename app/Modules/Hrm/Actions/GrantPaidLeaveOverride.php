@@ -4,7 +4,6 @@ namespace App\Modules\Hrm\Actions;
 
 use App\Models\User;
 use App\Modules\Hrm\Models\LeaveRequest;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -22,7 +21,8 @@ use Illuminate\Validation\ValidationException;
  *  - Records who granted it, when, and why, for the audit trail.
  *  - Draws on NO quota - the whole point is that the employee had none. No leave
  *    ledger entry is written and no balance moves; the grant is the company's,
- *    not the employee's entitlement.
+ *    not the employee's entitlement. (27 Oct 2026: a balance that has days
+ *    again by now is drawn first; see handle below.)
  *  - Does NOT reprocess the covered days. The paid/unpaid split lives only on the
  *    request; the attendance day is already "on leave" and unchanged. Touching
  *    the day would set a finalised day provisional again and needlessly re-block
@@ -32,7 +32,14 @@ use Illuminate\Validation\ValidationException;
  */
 class GrantPaidLeaveOverride
 {
+    public function __construct(private readonly DecideLeavePay $decide) {}
+
     /**
+     * ⭐ 27 Oct 2026: now the "pay every day" branch of DecideLeavePay, so there
+     * is one code path for the pay on a leave. On the unpaid type, or when the
+     * balance is empty, that is exactly the grant described above; when the
+     * balance has days again since approval, they are drawn first.
+     *
      * @throws ValidationException
      */
     public function handle(LeaveRequest $request, User $grantedBy, string $reason): LeaveRequest
@@ -49,15 +56,6 @@ class GrantPaidLeaveOverride
             ]);
         }
 
-        return DB::transaction(function () use ($request, $grantedBy, $reason) {
-            $request->update([
-                'unpaid_days' => 0,
-                'paid_override_by' => $grantedBy->id,
-                'paid_override_at' => now(),
-                'paid_override_reason' => $reason,
-            ]);
-
-            return $request->fresh();
-        });
+        return $this->decide->handle($request, $grantedBy, 0.0, $reason);
     }
 }
