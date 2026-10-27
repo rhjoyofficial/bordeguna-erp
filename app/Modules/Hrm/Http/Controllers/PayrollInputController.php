@@ -26,6 +26,7 @@ use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Models\SalaryStructure;
 use App\Modules\Hrm\Payroll\PayrollConfig;
+use App\Modules\Hrm\Support\EmployeePayAdjustments;
 use App\Modules\Hrm\Support\PayrollBalanceLedger;
 use App\Modules\Hrm\Support\PayrollInputWindow;
 use App\Modules\Purchasing\Support\CorrectionReasons;
@@ -355,6 +356,9 @@ class PayrollInputController extends Controller
 
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
+
+        // ⭐ My deductions (27 Oct 2026): the employee hears it once it is decided.
+        EmployeePayAdjustments::approved($adjustment, $request->user());
 
         return back()->with('success', 'Adjustment approved. It will appear on the payslip for that month.');
     }

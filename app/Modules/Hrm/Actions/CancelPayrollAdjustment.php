@@ -10,6 +10,7 @@ use App\Modules\Foundation\Scopes\BusinessScope;
 use App\Modules\Hrm\Corrections\PayrollAdjustmentActionPolicy;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollPeriod;
+use App\Modules\Hrm\Support\EmployeePayAdjustments;
 use App\Modules\Hrm\Support\PayrollInputWindow;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -77,6 +78,9 @@ class CancelPayrollAdjustment
     {
         $plan = $this->policy->plan($adjustment);
         $offset = null;
+        // ⭐ My deductions (27 Oct 2026): only a line that was going to change
+        // his pay is news to him; a pending one never reached him.
+        $wasPayable = $adjustment->isApproved() || $adjustment->isGenerated();
 
         if ($plan['offset'] !== null) {
             $period = PayrollPeriod::forMonth((int) $plan['offset']->year, (int) $plan['offset']->month);
@@ -110,6 +114,10 @@ class CancelPayrollAdjustment
             'month' => $adjustment->period?->label(),
             'opposite' => $offset === null ? null : "#{$offset->id} {$offset->type->label()} in {$offset->period?->label()}",
         ], fn ($v) => $v !== null));
+
+        if ($wasPayable) {
+            EmployeePayAdjustments::cancelled($adjustment, $by, $why->display(), $offset);
+        }
 
         return $adjustment->fresh();
     }

@@ -11,6 +11,7 @@ use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Payroll\Payslip\PayslipDocument;
 use App\Modules\Hrm\Payroll\Payslip\PayslipPassword;
 use App\Modules\Hrm\Payroll\Payslip\PayslipPdf;
+use App\Modules\Hrm\Support\EmployeePayAdjustments;
 use App\Modules\Hrm\Support\PayslipAddress;
 use App\Modules\Hrm\Support\SelfScope;
 use Illuminate\Http\RedirectResponse;
@@ -60,6 +61,9 @@ class PayslipController extends Controller
             ],
             'password_hint' => PayslipPassword::HINT,
             'password_unavailable' => PayslipPassword::missingReason($employee),
+            // ⭐ My deductions (27 Oct 2026): what is decided for his next salary,
+            // before that payslip is his to see. His own only.
+            'upcoming_adjustments' => EmployeePayAdjustments::upcoming($employee),
             'payslips' => $payslips->map(fn (Payslip $payslip) => [
                 'id' => $payslip->id,
                 'period' => $payslip->run?->period?->label(),
@@ -188,6 +192,6 @@ class PayslipController extends Controller
      */
     private function visibleStatuses(): array
     {
-        return [PayrollStatus::Approved, PayrollStatus::Disbursed, PayrollStatus::Locked];
+        return EmployeePayAdjustments::finishedStatuses();
     }
 }
