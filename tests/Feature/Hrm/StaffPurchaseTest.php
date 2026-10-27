@@ -11,6 +11,7 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollPeriod;
+use App\Modules\Hrm\Support\StaffPurchaseLimits;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
@@ -225,6 +226,31 @@ it('turns a salary-deduction handover into a generated payroll adjustment', func
         ->and($adjustment->source_key)->toContain('staff_purchase')
         // On account: the invoice stands open until payroll settles it.
         ->and(DB::table('sales_invoices')->count())->toBe(1);
+});
+
+// ⭐ 27 Oct 2026 (Joy): "for employees everything not 1-31 always 24-23".
+it('counts the one-unit rule and the allowance over the 24-23 cycle, so the 24th starts afresh', function () {
+    Carbon::setTestNow('2026-09-23 11:00:00');
+    applyFor([['product_id' => $this->honey->id]]);
+
+    // 24 Sep is still September on the calendar, but it opens the October cycle.
+    Carbon::setTestNow('2026-09-24 09:00:00');
+    applyFor([['product_id' => $this->honey->id]]);
+
+    // 30 Sep is the same cycle as 24 Sep: the second honey is at the reference price.
+    Carbon::setTestNow('2026-09-30 09:00:00');
+    applyFor([['product_id' => $this->honey->id]]);
+
+    expect(DB::table('staff_purchase_lines')->orderBy('id')->pluck('priced_at')->all())->toBe(['staff', 'staff', 'reference'])
+        ->and(StaffPurchaseLimits::referenceUsed($this->staffEmployee->id, Carbon::parse('2026-10-23')))->toBe(1700.0)
+        ->and(StaffPurchaseLimits::referenceUsed($this->staffEmployee->id, Carbon::parse('2026-09-23')))->toBe(850.0);
+
+    // HR's statement and audit tabs open on the cycle containing today, by its label.
+    ($this->asHr)()->get(route('hrm.staff-purchases.index', ['tab' => 'audit']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('month', '2026-10')
+            ->where('month_range', 'October 2026 (24 Sep to 23 Oct 2026)'));
 });
 
 it('keeps approval away from the staff themselves', function () {

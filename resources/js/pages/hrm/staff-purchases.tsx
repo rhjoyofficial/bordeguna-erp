@@ -103,6 +103,7 @@ interface AuditRow {
 interface StaffPurchasesProps {
     tab: 'requests' | 'statement' | 'audit';
     month: string;
+    month_range: string;
     requests: RequestRow[];
     moneyAccounts: { id: number; name: string; type: string }[];
     canSeeCostBasis: boolean;
@@ -711,6 +712,7 @@ function Audit({ rows }: { rows: AuditRow[] }) {
 export default function StaffPurchases({
     tab,
     month,
+    month_range,
     requests,
     moneyAccounts,
     canSeeCostBasis,
@@ -730,7 +732,7 @@ export default function StaffPurchases({
         router.get(
             '/hrm/staff-purchases',
             { tab: next, month: nextMonth },
-            { preserveState: true, preserveScroll: true, only: [next, 'tab', 'month'] },
+            { preserveState: true, preserveScroll: true, only: [next, 'tab', 'month', 'month_range'] },
         );
 
     return (
@@ -765,6 +767,7 @@ export default function StaffPurchases({
                             <label className="text-muted-foreground flex items-center gap-2 text-xs">
                                 {t('staff_purchases.month')}
                                 <Input type="month" className="h-8 w-40" value={month} onChange={(e) => go(tab, e.target.value)} />
+                                <span>{month_range}</span>
                             </label>
                         )}
                     </div>

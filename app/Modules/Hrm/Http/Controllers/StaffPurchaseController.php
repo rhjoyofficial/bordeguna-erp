@@ -216,6 +216,8 @@ class StaffPurchaseController extends Controller
         return Inertia::render('hrm/staff-purchases', [
             'tab' => in_array($request->string('tab')->toString(), ['requests', 'statement', 'audit'], true) ? $request->string('tab')->toString() : 'requests',
             'month' => $month->format('Y-m'),
+            // ⭐ 27 Oct 2026: the picked month is the 24-23 cycle carrying that label.
+            'month_range' => PayrollCycle::describe((int) $month->year, (int) $month->month),
             'requests' => StaffPurchaseRequest::query()
                 ->where('business_id', $businessId)
                 ->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'needs_reapproval' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END")
@@ -655,7 +657,7 @@ class StaffPurchaseController extends Controller
         $requests = StaffPurchaseRequest::query()
             ->where('business_id', $businessId)
             ->where('status', StaffPurchaseRequest::FULFILLED)
-            ->whereBetween('fulfilled_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])
+            ->whereBetween('fulfilled_at', $this->cycleWindow($month))
             ->with(['lines', 'employee', 'invoice'])
             ->orderBy('fulfilled_at')->get();
 
@@ -727,7 +729,7 @@ class StaffPurchaseController extends Controller
     {
         $events = StaffPurchaseEvent::query()
             ->where('business_id', $businessId)
-            ->whereBetween('created_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])
+            ->whereBetween('created_at', $this->cycleWindow($month))
             ->with(['request.employee', 'actor:id,name'])
             ->orderByDesc('id')->limit(500)->get();
 
@@ -844,11 +846,37 @@ class StaffPurchaseController extends Controller
         return $warehouse;
     }
 
+    /**
+     * The month label the statement and audit tabs are about.
+     *
+     * ⭐ 27 Oct 2026 (Joy): "for employees everything not 1-31 always 24-23".
+     * The label names a payroll cycle (October = 24 Sep - 23 Oct), the same
+     * window the allowance is counted over, and the default is the cycle
+     * containing today rather than the calendar month.
+     */
     private function monthOf(Request $request): Carbon
     {
         $month = $request->string('month')->toString();
 
-        return preg_match('/^\d{4}-\d{2}$/', $month) === 1 ? Carbon::createFromFormat('Y-m', $month)->startOfMonth() : Carbon::now()->startOfMonth();
+        if (preg_match('/^\d{4}-\d{2}$/', $month) === 1) {
+            return Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+        }
+
+        $cycle = PayrollCycle::containing(Carbon::now());
+
+        return Carbon::create($cycle['year'], $cycle['month'], 1)->startOfDay();
+    }
+
+    /**
+     * The 24th 00:00 to the 23rd 23:59:59 of the cycle with this label.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function cycleWindow(Carbon $month): array
+    {
+        [$start, $end] = PayrollCycle::forMonth((int) $month->year, (int) $month->month);
+
+        return [$start->copy()->startOfDay(), $end->copy()->endOfDay()];
     }
 
     /**

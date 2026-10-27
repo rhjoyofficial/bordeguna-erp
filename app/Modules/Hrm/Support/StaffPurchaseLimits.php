@@ -15,12 +15,19 @@ use Illuminate\Validation\ValidationException;
  * (ChatGPT ruling Q3, Phase 2, 17 Oct 2026):
  *
  *  - only active staff employed in this business;
- *  - one unit per SKU per calendar month at the staff price; a further unit
+ *  - one unit per SKU per month at the staff price; a further unit
  *    is priced at the cap reference price (MRP or market price) automatically,
  *    or refused when the product has none;
- *  - Tk 3,000 per calendar month measured at the cap reference price frozen
+ *  - Tk 3,000 per month measured at the cap reference price frozen
  *    on each line; approved-but-not-handed-over requests count, cancelled and
  *    rejected never do; nothing carries forward.
+ *
+ * ⭐ 27 Oct 2026 (Joy): "for employees everything not 1-31 always 24-23". The
+ * "month" above is the 24-23 payroll cycle the request was made in
+ * (`window()`, from `PayrollCycle::containing`), and the month counter row is
+ * keyed by that cycle's label (a request on 27 Oct locks 2026/11). It was the
+ * calendar month before; nothing is stored per month except the lock row, so
+ * the switch needs no data change.
  *
  * ⚠⚠ CONCURRENCY. Two requests for the last Tk 500 of an allowance must not
  * both pass. Every check runs inside a transaction AFTER `lockMonth()` took a
@@ -31,10 +38,24 @@ use Illuminate\Validation\ValidationException;
  */
 final class StaffPurchaseLimits
 {
-    /** Serialise this employee's month. Inside a transaction, before any check. */
+    /**
+     * The payroll cycle a date falls in, as the [start, end] of the created_at
+     * window: from the first moment of the 24th to the last moment of the 23rd.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public static function window(Carbon $date): array
+    {
+        $cycle = PayrollCycle::containing($date);
+
+        return [$cycle['start']->copy()->startOfDay(), $cycle['end']->copy()->endOfDay()];
+    }
+
+    /** Serialise this employee's cycle. Inside a transaction, before any check. */
     public static function lockMonth(Employee $employee, Carbon $month): void
     {
-        $key = ['employee_id' => $employee->id, 'year' => (int) $month->year, 'month' => (int) $month->month];
+        $cycle = PayrollCycle::containing($month);
+        $key = ['employee_id' => $employee->id, 'year' => $cycle['year'], 'month' => $cycle['month']];
 
         if (! DB::table('staff_purchase_month_counters')->where($key)->exists()) {
             DB::table('staff_purchase_month_counters')->insertOrIgnore($key + [
@@ -74,7 +95,7 @@ final class StaffPurchaseLimits
             ->where('staff_purchase_requests.employee_id', $employeeId)
             ->whereIn('staff_purchase_requests.status', StaffPurchaseRequest::COUNTING)
             ->when($exceptRequestId !== null, fn ($q) => $q->where('staff_purchase_requests.id', '<>', $exceptRequestId))
-            ->whereBetween('staff_purchase_requests.created_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])
+            ->whereBetween('staff_purchase_requests.created_at', self::window($month))
             // ⭐ Answer 6: a custom-priced not-for-sale line is not the benefit.
             ->where('staff_purchase_lines.priced_at', '!=', StaffPurchaseLine::PRICED_AT_CUSTOM)
             ->sum(DB::raw('staff_purchase_lines.cap_reference_price * staff_purchase_lines.quantity'));
@@ -90,7 +111,7 @@ final class StaffPurchaseLimits
             ->where('staff_purchase_lines.priced_at', StaffPurchaseLine::PRICED_AT_STAFF)
             ->whereIn('staff_purchase_requests.status', StaffPurchaseRequest::COUNTING)
             ->when($exceptRequestId !== null, fn ($q) => $q->where('staff_purchase_requests.id', '<>', $exceptRequestId))
-            ->whereBetween('staff_purchase_requests.created_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])
+            ->whereBetween('staff_purchase_requests.created_at', self::window($month))
             ->sum('staff_purchase_lines.quantity');
     }
 
