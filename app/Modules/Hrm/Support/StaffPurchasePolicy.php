@@ -12,10 +12,10 @@ namespace App\Modules\Hrm\Support;
  */
 final class StaffPurchasePolicy
 {
-    /** Rule 2: Tk 3,000 per calendar month, measured at the cap reference price. */
+    /** Rule 2: Tk 3,000 per 24-23 payroll cycle (27 Oct 2026), measured at the cap reference price. */
     public const MONTHLY_CAP_AT_REFERENCE = 3000.0;
 
-    /** Rule 3: one unit per SKU per calendar month at the staff price. */
+    /** Rule 3: one unit per SKU per 24-23 payroll cycle (27 Oct 2026) at the staff price. */
     public const UNITS_PER_SKU_PER_MONTH_AT_STAFF_PRICE = 1;
 
     /** Q1: the staff price is the cost of the FIFO batch reserved at approval. */

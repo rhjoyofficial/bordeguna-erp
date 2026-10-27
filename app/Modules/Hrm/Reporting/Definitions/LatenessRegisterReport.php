@@ -14,6 +14,7 @@ use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
 use App\Modules\Hrm\Reporting\ReportParameter;
 use App\Modules\Hrm\Reporting\ReportParameters;
+use App\Modules\Hrm\Support\PayrollCycle;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -40,9 +41,16 @@ use Illuminate\Support\LazyCollection;
  * disagree with the payslip; hiding the waiver entirely would lose the fact
  * that somebody decided. Both numbers, side by side.
  *
- * Months are CALENDAR months, not the 24-23 payroll cycle: the ladders these
- * counts come from reset per calendar month, so any other grouping would report
- * occurrences against a counter that restarted mid-row.
+ * ⭐ 27 Oct 2026 (Joy): "for employees everything not 1-31 always 24-23".
+ * Months are PAYROLL CYCLES, labelled where they end: "March" is 24 Feb - 23
+ * Mar, and the year runs from 24 Dec of the year before to 23 Dec. That is
+ * also where the ladders reset (since 9 Sep 2026) and the month the earned
+ * leave decision is made for (from cycle month 10), so a row now counts
+ * against one counter. It said CALENDAR months before, reasoning that the
+ * ladders reset on the 1st; they no longer do.
+ *
+ * ⚠ Earned leave rows for 2026 months 8 and 9 were decided on the calendar
+ * month. They still print against the row with the same label.
  */
 class LatenessRegisterReport implements ReportDefinition
 {
@@ -130,6 +138,8 @@ class LatenessRegisterReport implements ReportDefinition
         $year = $this->year($parameters);
 
         return LazyCollection::make(function () use ($parameters, $year) {
+            // Read once: PayrollCycle::startDay() is a query, and this loop runs per row.
+            $startDay = PayrollCycle::startDay();
             $ranks = $this->windowRanks($year);
             $notices = $this->noticeCounts($year);
             $accruals = $this->accrualDecisions($year);
@@ -162,7 +172,7 @@ class LatenessRegisterReport implements ReportDefinition
                     continue;
                 }
 
-                $month = (int) Carbon::parse((string) $record->attendance_date)->month;
+                $month = PayrollCycle::containing(Carbon::parse((string) $record->attendance_date), $startDay)['month'];
                 $months[$month] ??= $this->blankMonth();
 
                 $rank = $ranks[(string) $record->grace_window_key] ?? null;
@@ -214,6 +224,17 @@ class LatenessRegisterReport implements ReportDefinition
     }
 
     /**
+     * The year as twelve payroll cycles: the start of January's cycle to the
+     * end of December's (24 Dec of the year before to 23 Dec).
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function bounds(int $year): array
+    {
+        return [PayrollCycle::forMonth($year, 1)[0], PayrollCycle::forMonth($year, 12)[1]];
+    }
+
+    /**
      * Every lateness band the year could have been judged by, ranked by how
      * late it is - 0 ordinary, 1 serious, 2 and up beyond that.
      *
@@ -221,11 +242,13 @@ class LatenessRegisterReport implements ReportDefinition
      */
     private function windowRanks(int $year): array
     {
+        [$start, $end] = $this->bounds($year);
+
         $policies = AttendancePolicy::query()
-            ->whereDate('effective_from', '<=', Carbon::create($year, 12, 31)->toDateString())
+            ->whereDate('effective_from', '<=', $end->toDateString())
             ->where(fn ($query) => $query
                 ->whereNull('effective_to')
-                ->orWhereDate('effective_to', '>=', Carbon::create($year, 1, 1)->toDateString()))
+                ->orWhereDate('effective_to', '>=', $start->toDateString()))
             ->get();
 
         $ranks = [];
@@ -248,14 +271,18 @@ class LatenessRegisterReport implements ReportDefinition
      */
     private function noticeCounts(int $year): array
     {
+        [$start, $end] = $this->bounds($year);
+        $startDay = PayrollCycle::startDay();
+
+        // Bucketed in PHP by cycle: no SQL month function knows the 24th.
         return ShowCauseNotice::query()
-            ->whereYear('issued_at', $year)
+            ->whereDate('issued_at', '>=', $start->toDateString())
+            ->whereDate('issued_at', '<=', $end->toDateString())
             // A withdrawn notice is not a warning on record (corrections wave 3).
             ->whereNull('withdrawn_at')
-            ->selectRaw('employee_id, '.$this->monthExpression('issued_at').' as m, count(*) as total')
-            ->groupBy('employee_id', 'm')
-            ->get()
-            ->mapWithKeys(fn ($row) => [$row->employee_id.':'.(int) $row->m => (int) $row->total])
+            ->get(['employee_id', 'issued_at'])
+            ->countBy(fn (ShowCauseNotice $notice) => $notice->employee_id.':'
+                .PayrollCycle::containing(Carbon::parse((string) $notice->issued_at), $startDay)['month'])
             ->all();
     }
 
@@ -269,17 +296,6 @@ class LatenessRegisterReport implements ReportDefinition
             ->get()
             ->mapWithKeys(fn (EarnedLeaveAccrual $row) => [$row->employee_id.':'.$row->month => $row])
             ->all();
-    }
-
-    /**
-     * ⚠ SQLite and MySQL disagree about month extraction, and the suite runs on
-     * one while production runs on the other.
-     */
-    private function monthExpression(string $column): string
-    {
-        return DB::connection()->getDriverName() === 'sqlite'
-            ? "cast(strftime('%m', {$column}) as integer)"
-            : "month({$column})";
     }
 
     /**
@@ -343,7 +359,7 @@ class LatenessRegisterReport implements ReportDefinition
      */
     private function employees(ReportParameters $parameters, int $year): Builder
     {
-        $asAt = Carbon::create($year, 12, 31)->toDateString();
+        $asAt = $this->bounds($year)[1]->toDateString();
         $businessId = $this->context->id();
 
         return Employee::query()
@@ -373,8 +389,9 @@ class LatenessRegisterReport implements ReportDefinition
 
     private function query(ReportParameters $parameters, int $year): Builder
     {
-        $start = Carbon::create($year, 1, 1)->toDateString();
-        $end = Carbon::create($year, 12, 31)->toDateString();
+        [$from, $to] = $this->bounds($year);
+        $start = $from->toDateString();
+        $end = $to->toDateString();
 
         return $this->employees($parameters, $year)
             ->leftJoin('daily_attendances', function ($join) use ($start, $end) {

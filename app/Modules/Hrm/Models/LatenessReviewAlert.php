@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * The durable record that HR was alerted: this employee has reached the last
  * FREE occurrence of a lateness window this month - one more and the ladder
- * bites. One row per employee + window + calendar month; the unique index is
+ * bites. One row per employee + window + payroll cycle; the unique index is
  * the real idempotency guarantee, and it is what keeps a force-rebuild of the
  * month from ringing the same bell twice.
  */

@@ -127,7 +127,14 @@ final class DashboardFilters
      */
     public function month(): Carbon
     {
-        return $this->to()->copy()->startOfMonth();
+        // ⭐ 27 Oct 2026 (Joy): "for employees everything not 1-31 always
+        // 24-23". The month is the label of the payroll cycle the range ends
+        // in, so a range ending on the 25th is about the NEXT month's cycle,
+        // and the tiles drill into reports that read the label as that cycle.
+        // The default range ends on the 23rd, where the two always agreed.
+        $cycle = PayrollCycle::containing($this->to());
+
+        return Carbon::create($cycle['year'], $cycle['month'], 1)->startOfDay();
     }
 
     /**

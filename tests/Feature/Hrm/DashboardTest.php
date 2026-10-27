@@ -343,9 +343,10 @@ it('answers about the month it was asked for, not the one that has finished', fu
     // An empty August is a true and useful answer; a July figure is not.
     $next = now()->addMonth()->startOfMonth();
 
+    // Ends on the 23rd: the last day of the payroll cycle labelled $next.
     $filters = ($this->filtersFor)($this->hr, [
         'range_from' => $next->toDateString(),
-        'range_to' => $next->copy()->endOfMonth()->toDateString(),
+        'range_to' => $next->copy()->day(23)->toDateString(),
     ]);
 
     expect($filters->month()->format('Y-m'))->toBe($next->format('Y-m'))
@@ -358,6 +359,26 @@ it('answers about the month it was asked for, not the one that has finished', fu
 
     expect(app(PayrollStatusWidget::class)->value($filters)->note)
         ->toContain($next->format('F Y'));
+});
+
+// ⭐ 27 Oct 2026 (Joy): "for employees everything not 1-31 always 24-23".
+it('takes the month from the payroll cycle the range ends in, so the 24th is the next month', function () {
+    $on23rd = ($this->filtersFor)($this->hr, ['range_from' => '2026-10-01', 'range_to' => '2026-10-23']);
+    $on24th = ($this->filtersFor)($this->hr, ['range_from' => '2026-10-01', 'range_to' => '2026-10-24']);
+
+    expect($on23rd->month()->format('Y-m'))->toBe('2026-10')
+        ->and($on24th->month()->format('Y-m'))->toBe('2026-11')
+        ->and(app(MissingPunchesWidget::class)->value($on24th)->drilldownParameters['month'])->toBe('2026-11');
+});
+
+it('opens a month-shaped HR report on the payroll cycle containing today', function () {
+    Carbon::setTestNow('2026-10-24 10:00:00');
+    $after = collect(app(AttendanceExceptionReport::class)->parameters())->firstWhere('key', 'month')->default;
+
+    Carbon::setTestNow('2026-10-23 10:00:00');
+    $before = collect(app(AttendanceExceptionReport::class)->parameters())->firstWhere('key', 'month')->default;
+
+    expect($after)->toBe('2026-11')->and($before)->toBe('2026-10');
 });
 
 it('refuses a range that ends before it starts instead of quietly showing nothing', function () {

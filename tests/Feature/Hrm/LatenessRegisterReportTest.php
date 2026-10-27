@@ -277,3 +277,31 @@ it('lets HR revise a policy whose window set is not the shape it was seeded with
     expect($revised->toConfig()->windowFor(400)?->key)->toBe('half_the_day_gone')
         ->and($revised->toConfig()->windowFor(200)?->key)->toBe('beyond_three_hours');
 });
+
+// ⭐ 27 Oct 2026 (Joy): "for employees everything not 1-31 always 24-23".
+it('groups the year by payroll cycle, so the 24th belongs to the next month', function () {
+    $employee = ($this->makeEmployee)('BDG-000001');
+
+    ($this->lateRow)($employee, '2025-12-24', 'within_grace', 5); // January 2026's cycle
+    ($this->lateRow)($employee, '2026-03-23', 'within_grace', 5); // last day of March
+    ($this->lateRow)($employee, '2026-03-24', 'within_grace', 5); // first day of April
+    ($this->lateRow)($employee, '2026-12-24', 'within_grace', 5); // January 2027, not this year
+
+    ShowCauseNotice::create([
+        'business_id' => $this->business->id,
+        'employee_id' => $employee->id,
+        'issued_by' => $this->hr->id,
+        'subject' => 'Repeated late arrival',
+        'body' => 'Please explain.',
+        'issued_at' => '2026-05-25 10:00:00',
+    ]);
+
+    $rows = collect(($this->rowsFor)());
+
+    expect($rows->firstWhere('month', 'January')['ordinary_lates'])->toBe(1)
+        ->and($rows->firstWhere('month', 'March')['ordinary_lates'])->toBe(1)
+        ->and($rows->firstWhere('month', 'April')['ordinary_lates'])->toBe(1)
+        ->and($rows->firstWhere('month', 'December')['ordinary_lates'])->toBe(0)
+        ->and($rows->firstWhere('month', 'May')['notices'])->toBe(0)
+        ->and($rows->firstWhere('month', 'June')['notices'])->toBe(1);
+});

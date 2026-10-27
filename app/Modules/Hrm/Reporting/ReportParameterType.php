@@ -27,6 +27,12 @@ enum ReportParameterType: string
      * did you mean"; a payroll period is C7b's 24th-to-23rd cycle, which is not
      * a month at all. The attendance reports in RPT-01 are monthly in the
      * calendar sense, so they say so.
+     *
+     * ⚠ Superseded in meaning (23 Aug 2026, restated by Joy 27 Oct 2026: "for
+     * employees everything not 1-31 always 24-23"): the value is a month LABEL,
+     * and `ReportParameters::monthStart()/monthEnd()` read it as the payroll
+     * cycle carrying that label. What stays distinct from `Period` is that the
+     * label needs no payroll period row to exist.
      */
     case Month = 'month';
 

@@ -2,6 +2,8 @@
 
 namespace App\Modules\Hrm\Reporting;
 
+use App\Modules\Hrm\Support\PayrollCycle;
+
 /**
  * One input a report asks for, declared by its definition.
  *
@@ -35,9 +37,21 @@ final class ReportParameter
         return new self($key, $label, ReportParameterType::DateRange, $required);
     }
 
+    /**
+     * ⭐ 27 Oct 2026 (Joy): "for employees everything not 1-31 always 24-23".
+     * The default is the label of the payroll cycle containing today (on 27 Oct
+     * that is November, 24 Oct - 23 Nov), the same cycle `monthStart()` falls
+     * back to. It was the calendar month, which after the 24th opened every HR
+     * report on the cycle that had already closed.
+     */
     public static function month(string $key = 'month', string $label = 'Month', bool $required = true, ?string $default = null): self
     {
-        return new self($key, $label, ReportParameterType::Month, $required, default: $default ?? now()->format('Y-m'));
+        if ($default === null) {
+            $cycle = PayrollCycle::containing(now());
+            $default = sprintf('%04d-%02d', $cycle['year'], $cycle['month']);
+        }
+
+        return new self($key, $label, ReportParameterType::Month, $required, default: $default);
     }
 
     public static function period(string $key = 'period_id', string $label = 'Payroll period', bool $required = true): self

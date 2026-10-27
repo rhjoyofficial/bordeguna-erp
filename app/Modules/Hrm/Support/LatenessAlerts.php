@@ -29,7 +29,7 @@ use Spatie\Permission\PermissionRegistrar;
  * occurrence has no free run to warn about, and a window with no consequence
  * tier at all never alerts.
  *
- * ⚠ Idempotent per employee + window + calendar month through
+ * ⚠ Idempotent per employee + window + payroll cycle through
  * lateness_review_alerts' unique index - a durable table, NOT a flag on the
  * daily row, because attendance is derived and this project force-rebuilt a
  * whole month twice in one day. An alert that re-fires on every rebuild
