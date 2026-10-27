@@ -3,7 +3,9 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Hrm\Actions\FinalizeAttendance;
+use App\Modules\Hrm\Actions\MakeDayUnpaid;
 use App\Modules\Hrm\Actions\ProcessAttendance;
 use App\Modules\Hrm\Enums\CorrectionType;
 use App\Modules\Hrm\Enums\PunchDirection;
@@ -12,10 +14,13 @@ use App\Modules\Hrm\Models\AttendancePolicy;
 use App\Modules\Hrm\Models\AttendanceWaiver;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\PayrollAdjustment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -89,6 +94,16 @@ class DailyAttendanceController extends Controller
             ->get()
             ->keyBy(fn (AttendanceWaiver $w) => $w->employee_id.'|'.$w->attendance_date->toDateString());
 
+        // ⭐ 27 Oct 2026 (Joy): worked days made unpaid for a rule break, so the
+        // row can say so and link to its penalty. Standing ones only: a
+        // cancelled or rejected penalty no longer takes the day's pay.
+        $unpaid = PayrollAdjustment::with('approvalRequest')
+            ->whereIn('source_key', $days->map(fn (DailyAttendance $d) => MakeDayUnpaid::sourceKey($d->employee_id, $d->attendance_date))->all())
+            ->whereNull('cancelled_at')
+            ->get()
+            ->reject(fn (PayrollAdjustment $a) => $a->approvalRequest?->status === ApprovalStatus::Rejected)
+            ->keyBy('source_key');
+
         // ⚠ A department may carry its own order, so "the policy in force" is no
         // longer one row. Naming only the business default here would put a
         // policy name above a grid half of whose rows were judged by another.
@@ -129,10 +144,13 @@ class DailyAttendanceController extends Controller
                     ->pluck('employee_id')))
                 ->orderBy('employee_code')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName().' ('.$e->employee_code.')']),
-            'days' => $days->map(fn (DailyAttendance $day) => $this->present($day, $fixes, $waivers)),
+            'days' => $days->map(fn (DailyAttendance $day) => $this->present($day, $fixes, $waivers, $unpaid)),
             // Forgiving money is its own permission, not part of managing
             // attendance - the button only shows to those who hold it.
             'can_waive' => $request->user()->can('hrm.attendance.waive'),
+            // ⭐ 27 Oct 2026: making a worked day unpaid raises a Penalty, the
+            // same power that raises one by hand on Payroll, Inputs.
+            'can_make_unpaid' => $request->user()->can('hrm.payroll.manage'),
             // The fix dialog's vocabulary, same shapes the clock page uses.
             // Anyone on this screen holds hrm.attendance.manage, so a
             // correction filed here applies IMMEDIATELY and reprocesses the
@@ -187,6 +205,39 @@ class DailyAttendanceController extends Controller
             $results->count(),
             $results->count() === 1 ? '' : 's',
             ($validated['force'] ?? false) ? '' : ' Finalised days were left untouched.',
+        ));
+    }
+
+    /**
+     * ⭐ 27 Oct 2026 (Joy): "one day one employee came but break some rules for
+     * that office give him that day unpaid." A Penalty of one day's pay (or
+     * half), waiting for approval like any adjustment (MakeDayUnpaid).
+     */
+    public function makeUnpaid(Request $request, MakeDayUnpaid $action): RedirectResponse
+    {
+        $this->authorize('hrm.attendance.manage');
+        $this->authorize('hrm.payroll.manage');
+
+        $validated = $request->validate([
+            'employee_id' => ['required', 'integer', Rule::exists('employees', 'id')],
+            'date' => ['required', 'date'],
+            'portion' => ['required', Rule::in(['full', 'half'])],
+            'reason' => ['required', 'string', 'max:900'],
+        ]);
+
+        $adjustment = $action->handle(
+            Employee::findOrFail($validated['employee_id']),
+            $validated['date'],
+            $validated['portion'] === 'half',
+            $validated['reason'],
+            $request->user(),
+        );
+
+        return back()->with('success', sprintf(
+            'Penalty #%d of %s raised on the %s payroll. It waits for approval like any adjustment; Cancel it to undo.',
+            $adjustment->id,
+            number_format((float) $adjustment->amount, 2),
+            $adjustment->period?->label(),
         ));
     }
 
@@ -253,12 +304,27 @@ class DailyAttendanceController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function present(DailyAttendance $day, Collection $fixes, Collection $waivers): array
+    private function present(DailyAttendance $day, Collection $fixes, Collection $waivers, Collection $unpaid): array
     {
         $key = $day->employee_id.'|'.$day->attendance_date->toDateString();
         $waiver = $waivers->get($key);
+        $penalty = $unpaid->get(MakeDayUnpaid::sourceKey($day->employee_id, $day->attendance_date));
 
         return [
+            // ⭐ 27 Oct 2026: made unpaid for a rule break, and its penalty.
+            'unpaid' => $penalty === null ? null : [
+                'id' => $penalty->id,
+                'reason' => Str::after($penalty->reason, '): '),
+                'amount' => number_format((float) $penalty->amount, 2),
+                'half_day' => str_contains($penalty->reason, 'half day unpaid'),
+                'pending' => $penalty->approvalRequest?->status === ApprovalStatus::Pending,
+                'url' => route('hrm.payroll.inputs.index', ['employee_id' => $penalty->employee_id, 'payroll_period_id' => $penalty->payroll_period_id]),
+            ],
+            // Which portions this day can still be made unpaid for (none once it is).
+            'unpaid_portions' => $penalty !== null ? [] : array_values(array_filter([
+                MakeDayUnpaid::refusal($day, false, '') === null ? 'full' : null,
+                MakeDayUnpaid::refusal($day, true, '') === null ? 'half' : null,
+            ])),
             // Forgiveness, if any: who removed this day's deduction and why.
             // The day's own verdict below stays untouched - that is the point.
             'waiver' => $waiver === null ? null : [

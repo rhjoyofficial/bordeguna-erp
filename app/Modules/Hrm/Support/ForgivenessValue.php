@@ -38,18 +38,7 @@ class ForgivenessValue
     {
         $date = Carbon::parse($waiver->attendance_date);
         $spec = PayrollPeriodSpec::containing($date, PayrollCycle::startDay());
-
-        $structure = SalaryStructure::activeFor($waiver->employee_id, $date);
-        $breakdown = $structure?->breakdown();
-
-        $config = PayrollConfig::defaults(divisorDays: $spec->divisorDays);
-
-        // ⚠ No salary structure on that date means no deduction could have been
-        // priced either, so the honest value is zero rather than a guess from
-        // whatever the person earns now.
-        $rate = $breakdown === null
-            ? 0.0
-            : $config->dailyRateFrom((float) $breakdown->basic, (float) $breakdown->gross);
+        $rate = self::dayRate($waiver->employee_id, $date);
 
         return [
             'year' => $spec->year,
@@ -60,5 +49,28 @@ class ForgivenessValue
             'amount' => round($rate, 2),
             'daily_rate' => round($rate, 2),
         ];
+    }
+
+    /**
+     * One day's pay for this person on this date, exactly as payroll prices a
+     * day of absence or Leave Without Pay (PAY-02 via PayrollConfig), unrounded.
+     * ⭐ 27 Oct 2026: also what a worked day made unpaid costs (MakeDayUnpaid),
+     * so forgiving a day and taking one are priced by the same rule.
+     */
+    public static function dayRate(int $employeeId, Carbon|string $date): float
+    {
+        $date = Carbon::parse($date);
+        $spec = PayrollPeriodSpec::containing($date, PayrollCycle::startDay());
+        $breakdown = SalaryStructure::activeFor($employeeId, $date)?->breakdown();
+
+        // ⚠ No salary structure on that date means no deduction could have been
+        // priced either, so the honest value is zero rather than a guess from
+        // whatever the person earns now.
+        if ($breakdown === null) {
+            return 0.0;
+        }
+
+        return PayrollConfig::defaults(divisorDays: $spec->divisorDays)
+            ->dailyRateFrom((float) $breakdown->basic, (float) $breakdown->gross);
     }
 }

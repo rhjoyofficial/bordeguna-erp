@@ -153,6 +153,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::get('attendance/employees/{employee}', [EmployeeAttendanceController::class, 'show'])->name('attendance.employee.show');
     Route::post('attendance/daily/process', [DailyAttendanceController::class, 'process'])->name('attendance.daily.process');
     Route::post('attendance/daily/finalize', [DailyAttendanceController::class, 'finalize'])->name('attendance.daily.finalize');
+    // ⭐ 27 Oct 2026 (Joy): a worked day made unpaid for a rule break (a Penalty, approved like any adjustment).
+    Route::post('attendance/daily/unpaid', [DailyAttendanceController::class, 'makeUnpaid'])->name('attendance.daily.unpaid');
 
     // Forgiving a day's deduction (24 Aug 2026). Its own permission,
     // deliberately NOT bundled with hrm.attendance.manage: recording what

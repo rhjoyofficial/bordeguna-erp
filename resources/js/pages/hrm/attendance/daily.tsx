@@ -17,8 +17,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { addDays, datesInText, dhakaToday, showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { Fragment, useState } from 'react';
 
 interface CorrectionTypeOption {
@@ -41,9 +42,22 @@ interface Waiver {
     at: string | null;
 }
 
+/** ⭐ 27 Oct 2026: a worked day made unpaid for a rule break, and its penalty. */
+interface UnpaidDay {
+    id: number;
+    reason: string;
+    amount: string;
+    half_day: boolean;
+    pending: boolean;
+    url: string;
+}
+
 interface Day {
     fixes: Fix[];
     waiver: Waiver | null;
+    unpaid: UnpaidDay | null;
+    /** What this day can still be made unpaid for: 'full', 'half', both or none. */
+    unpaid_portions: ('full' | 'half')[];
     costs_money: boolean;
     can_forgive: boolean;
     id: number;
@@ -91,6 +105,7 @@ interface DailyProps {
     correction_types: CorrectionTypeOption[];
     directions: { value: string; label: string }[];
     can_waive: boolean;
+    can_make_unpaid?: boolean;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -343,6 +358,90 @@ function ForgiveDialog({ day }: { day: Day }) {
 }
 
 /**
+ * ⭐ 27 Oct 2026 (Joy): "one day one employee came but break some rules for
+ * that office give him that day unpaid." A worked day made unpaid, full or
+ * half, with a reason: a Penalty of one day's pay on that day's payroll, which
+ * waits for approval like any adjustment and is undone by cancelling it.
+ */
+function MakeUnpaidDialog({ day }: { day: Day }) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    const [portion, setPortion] = useState<'full' | 'half'>(day.unpaid_portions[0] ?? 'full');
+    const [reason, setReason] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [saving, setSaving] = useState(false);
+
+    const submit = () => {
+        router.post(
+            route('hrm.attendance.daily.unpaid'),
+            { employee_id: day.employee_id, date: day.date, portion, reason },
+            {
+                preserveScroll: true,
+                onStart: () => setSaving(true),
+                onFinish: () => setSaving(false),
+                onError: (e: Record<string, string>) => setErrors(e),
+                onSuccess: () => {
+                    setOpen(false);
+                    setReason('');
+                    setErrors({});
+                },
+            },
+        );
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="ghost" size="sm">
+                    {t('unpaid_day.button')}
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{t('unpaid_day.title', { date: showDate(day.date), name: day.employee ?? '' })}</DialogTitle>
+                    <DialogDescription>{t('unpaid_day.intro')}</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-3">
+                    <div className="flex flex-wrap gap-3 text-sm" role="radiogroup" aria-label={t('unpaid_day.button')}>
+                        {day.unpaid_portions.map((p) => (
+                            <label key={p} className="inline-flex items-center gap-1.5">
+                                <input type="radio" name={`unpaid-portion-${day.id}`} checked={portion === p} onChange={() => setPortion(p)} />
+                                {t(p === 'full' ? 'unpaid_day.full' : 'unpaid_day.half')}
+                            </label>
+                        ))}
+                    </div>
+                    <div className="grid gap-1">
+                        <Label htmlFor={`unpaid-reason-${day.id}`} required>
+                            {t('unpaid_day.reason')}
+                        </Label>
+                        <Input
+                            id={`unpaid-reason-${day.id}`}
+                            aria-required
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            placeholder={t('unpaid_day.reason_placeholder')}
+                        />
+                    </div>
+                    {Object.values(errors).map((message) => (
+                        <p key={message} className="text-destructive text-xs">
+                            {message}
+                        </p>
+                    ))}
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">{t('unpaid_day.cancel')}</Button>
+                    </DialogClose>
+                    <Button onClick={submit} disabled={saving || reason.trim() === ''}>
+                        {t('unpaid_day.save')}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/**
  * Issue a show cause notice straight from the late day it is about
  * (Joy, 24 Aug 2026). The subject and body arrive prefilled from the day's
  * own facts - window, occurrence, date - and stay editable, because the
@@ -487,7 +586,9 @@ export default function DailyAttendance({
     correction_types = [],
     directions = [],
     can_waive = false,
+    can_make_unpaid = false,
 }: DailyProps) {
+    const { t } = useTranslation();
     const [expanded, setExpanded] = useState<number | null>(null);
     const [busy, setBusy] = useState(false);
 
@@ -685,6 +786,16 @@ export default function DailyAttendance({
                                                         Forgiven
                                                     </Badge>
                                                 )}
+                                                {day.unpaid && (
+                                                    <span className="mt-1 block text-xs whitespace-normal text-red-600 dark:text-red-400">
+                                                        {t('unpaid_day.shown', { reason: day.unpaid.reason })}{' '}
+                                                        <Link href={day.unpaid.url} className="underline">
+                                                            {t('unpaid_day.open', { id: day.unpaid.id, amount: day.unpaid.amount })}
+                                                        </Link>
+                                                        {day.unpaid.half_day && ` (${t('unpaid_day.half')})`}
+                                                        {day.unpaid.pending && `, ${t('unpaid_day.waiting')}`}
+                                                    </span>
+                                                )}
                                                 {day.fixes.length > 0 && (
                                                     <Badge
                                                         variant="outline"
@@ -756,6 +867,9 @@ export default function DailyAttendance({
                                                 {/* Money actions, only for hrm.attendance.waive holders:
                                                     forgive a costing day, or undo a forgiveness. */}
                                                 {can_waive && day.can_forgive && !day.waiver && <ForgiveDialog day={day} />}
+                                                {/* ⭐ 27 Oct 2026: a worked day made unpaid (a Penalty), for
+                                                    whoever may raise payroll adjustments. */}
+                                                {can_make_unpaid && !day.unpaid && day.unpaid_portions.length > 0 && <MakeUnpaidDialog day={day} />}
                                                 {can_waive && day.waiver && (
                                                     <Button
                                                         variant="ghost"
