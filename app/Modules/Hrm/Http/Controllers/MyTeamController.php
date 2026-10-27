@@ -7,6 +7,7 @@ use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\LeaveRequest;
+use App\Modules\Hrm\Support\LeaveRegister;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -55,13 +56,21 @@ class MyTeamController extends Controller
             ->get()
             ->groupBy('employee_id');
 
+        // ⭐ 27 Oct 2026 (Joy): the authority sees the team's leave year too:
+        // left / used per type and the unpaid days, the same figures as HR's register.
+        $register = LeaveRegister::for((int) Carbon::today()->year, $reports->pluck('id'));
+        $leaveYear = collect($register['rows'])->keyBy('id');
+
         return Inertia::render('hrm/my-team', [
+            'leave_year' => (int) Carbon::today()->year,
+            'leave_types' => $register['types'],
             'team' => $reports->map(fn (Employee $employee) => [
                 'id' => $employee->id,
                 'employee_code' => $employee->employee_code,
                 'name' => trim($employee->first_name.' '.$employee->last_name),
                 'designation' => $employee->currentAssignment()?->designation?->name,
                 'today' => $attendanceToday[$employee->id]?->value ?? $attendanceToday[$employee->id] ?? null,
+                'leave' => $leaveYear->get($employee->id),
                 'pending_leave' => ($pendingLeaves[$employee->id] ?? collect())->map(fn (LeaveRequest $leave) => [
                     'id' => $leave->id,
                     'type' => $leave->leaveType?->name,

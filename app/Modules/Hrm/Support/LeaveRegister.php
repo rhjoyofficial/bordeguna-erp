@@ -28,11 +28,15 @@ use Illuminate\Support\Collection;
 class LeaveRegister
 {
     /** @return array{types: Collection<int, array<string, mixed>>, rows: Collection<int, array<string, mixed>>} */
-    public static function for(int $year): array
+    /** @param  Collection<int, int>|null  $only  just these employees (My team), else everyone */
+    public static function for(int $year, ?Collection $only = null): array
     {
         $types = LeaveType::active()->where('deducts_balance', true)->orderBy('name')->get(['id', 'name']);
 
-        $employees = Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
+        // A team is already the caller's list; everyone means the active staff.
+        $employees = ($only !== null
+            ? Employee::whereIn('id', $only)
+            : Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true)))
             ->orderBy('employee_code')->get();
         $ids = $employees->pluck('id');
 
