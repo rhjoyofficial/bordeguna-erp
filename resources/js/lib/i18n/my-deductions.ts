@@ -17,7 +17,7 @@ export const myDeductions = {
     'my_adj.amount': { en: 'Amount', bn: 'টাকা' },
     'my_adj.reason': { en: 'Reason', bn: 'কারণ' },
     'my_adj.decided': { en: 'Decided', bn: 'সিদ্ধান্ত' },
-    'my_adj.by': { en: 'by {name}', bn: '{name}' },
+    'my_adj.by': { en: 'by {name}', bn: 'সিদ্ধান্ত: {name}' },
     'my_adj.deducted': { en: 'Deducted', bn: 'কাটা হবে' },
     'my_adj.added': { en: 'Added', bn: 'যোগ হবে' },
     'my_adj.type.addition': { en: 'Addition', bn: 'যোগ' },

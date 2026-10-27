@@ -245,7 +245,7 @@ export const lifetime = {
     'life.la_col_paid': { en: 'Paid days', bn: 'সবেতন দিন' },
     'life.la_col_unpaid': { en: 'Unpaid days', bn: 'বিনা বেতনের দিন' },
     'life.la_col_pay': { en: 'Pay decision', bn: 'বেতনের সিদ্ধান্ত' },
-    'life.la_decided_by': { en: 'by {name} on {date}', bn: '{name}, {date}' },
+    'life.la_decided_by': { en: 'by {name} on {date}', bn: '{name}, {date} তারিখে' },
     'life.la_col_cycle': { en: 'Payroll month', bn: 'বেতন মাস' },
     'life.la_col_present': { en: 'Present', bn: 'উপস্থিত' },
     'life.la_col_late': { en: 'Late', bn: 'দেরি' },
