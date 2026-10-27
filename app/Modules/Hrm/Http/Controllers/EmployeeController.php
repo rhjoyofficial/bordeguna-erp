@@ -37,6 +37,7 @@ use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Support\DateOfBirthRule;
+use App\Modules\Hrm\Support\EmployeeLeaveAttendance;
 use App\Modules\Hrm\Support\EmployeeMoney;
 use App\Modules\Sales\Support\SampleBook;
 use App\Support\Lifetime\LifetimeCsv;
@@ -305,6 +306,15 @@ class EmployeeController extends Controller
             // claims, staff purchases, set-offs and the person's ledger heads,
             // all time unless narrowed; each part only for a reader of it.
             'money' => fn () => (new EmployeeMoney($employee, $request->user(), LifetimeRange::fromRequest($request)))->props(),
+            // ⭐ 27 Oct 2026 (Joy: "from where hr can see an employee's all the
+            // things, like leave, how much left, paid"): leave balances and
+            // requests for a leave year, attendance per 24-23 payroll cycle and
+            // pay changes; each part only for a reader of it.
+            'leave_attendance' => fn () => (new EmployeeLeaveAttendance(
+                $employee,
+                $request->user(),
+                EmployeeLeaveAttendance::yearFrom($request->integer('leave_year') ?: null),
+            ))->props(),
             'employee' => [
                 'id' => $employee->id,
                 'employee_code' => $employee->employee_code,

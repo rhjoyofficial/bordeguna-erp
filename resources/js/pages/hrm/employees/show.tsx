@@ -1,5 +1,6 @@
 import { EmployeeCashCard, type EmployeeCashAccount } from '@/components/accounting/employee-cash-card';
 import { HrCorrectionActions, type HrActions } from '@/components/hrm/hr-correction-actions';
+import { EmployeeLeaveAttendancePanel, type EmployeeLeaveAttendanceData } from '@/components/lifetime/employee-leave-attendance';
 import { EmployeeMoneyPanel, type EmployeeMoneyData } from '@/components/lifetime/employee-money';
 import { CorrectionReasonDialog, type ReasonOption } from '@/components/purchasing/correction-actions';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
@@ -123,6 +124,8 @@ interface ShowProps {
     timeline?: TimelineEntry[];
     /** ⭐ B23 (25 Oct 2026; R77): the money tab, each part null when the reader may not see it. */
     money?: EmployeeMoneyData;
+    /** ⭐ 27 Oct 2026 (Joy): leave, attendance and pay changes, each part null when the reader may not see it. */
+    leave_attendance?: EmployeeLeaveAttendanceData;
     employee: EmployeeDetail;
     transitionable_statuses: Option[];
     can_confirm: boolean;
@@ -899,6 +902,7 @@ export default function EmployeeShow({
     corrections,
     employee_cash = [],
     money,
+    leave_attendance,
     samples,
 }: ShowProps) {
     const breadcrumbs: BreadcrumbItem[] = [
@@ -1077,6 +1081,8 @@ export default function EmployeeShow({
                 />
 
                 {money && <EmployeeMoneyPanel employeeId={employee.id} money={money} />}
+
+                {leave_attendance && <EmployeeLeaveAttendancePanel employeeId={employee.id} data={leave_attendance} />}
             </div>
             <div className="border-border bg-card mx-4 mb-4 rounded-lg border p-4">
                 <h2 className="mb-3 text-sm font-semibold">Timeline</h2>
