@@ -4,6 +4,10 @@ use App\Support\SentryScrubber;
 use Illuminate\Database\QueryException;
 use Sentry\Breadcrumb;
 use Sentry\Event;
+use Sentry\ExceptionDataBag;
+use Sentry\ExceptionMechanism;
+use Sentry\Frame;
+use Sentry\Stacktrace;
 
 /**
  * What Sentry may see. Checked against the rule (no secrets, no money, no
@@ -67,6 +71,8 @@ it('masks e-mail addresses and long digit runs in any other error message', func
     $clean = SentryScrubber::scrubMessage(RuntimeException::class, 'Cannot pay joy@example.com on account 1071837460002 or call 01334943783 for step 4');
 
     expect($clean)->toBe('Cannot pay [email] on account [number] or call [number] for step 4');
+
+    expect(SentryScrubber::scrubMessage(RuntimeException::class, 'Paid BDT 242,850.50 to Musa'))->toBe('Paid BDT [number] to Musa');
 });
 
 it('does not send breadcrumbs, which can carry log text', function () {
@@ -74,4 +80,18 @@ it('does not send breadcrumbs, which can carry log text', function () {
     $event->setBreadcrumb([new Breadcrumb(Breadcrumb::LEVEL_INFO, Breadcrumb::TYPE_DEFAULT, 'log', 'Paid BDT 242,850 to Musa')]);
 
     expect(SentryScrubber::beforeSend($event)->getBreadcrumbs())->toBe([]);
+});
+
+it('clears stack-frame variables and scrubs the event message', function () {
+    $frame = new Frame('pay', '/app/Pay.php', 10);
+    $frame->setVars(['employee' => ['salary' => 30000, 'email' => 'joy@example.com']]);
+    $exception = new ExceptionDataBag(new RuntimeException('x'), new Stacktrace([$frame]), new ExceptionMechanism(ExceptionMechanism::TYPE_GENERIC, true));
+    $event = Event::createEvent();
+    $event->setExceptions([$exception]);
+    $event->setMessage('Failed for joy@example.com');
+
+    $sent = SentryScrubber::beforeSend($event);
+
+    expect($sent->getExceptions()[0]->getStacktrace()->getFrames()[0]->getVars())->toBe([])
+        ->and($sent->getMessage())->toBe('Failed for [email]');
 });

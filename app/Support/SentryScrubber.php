@@ -47,6 +47,18 @@ final class SentryScrubber
         }
         $event->setExceptions($exceptions);
 
+        // Stack-frame variables (function arguments) can hold a whole record,
+        // and the SQLSTATE rule above would not reach them: always cleared.
+        foreach ($event->getExceptions() as $exception) {
+            foreach ($exception->getStacktrace()?->getFrames() ?? [] as $frame) {
+                $frame->setVars([]);
+            }
+        }
+
+        if ($event->getMessage() !== null) {
+            $event->setMessage(self::scrubMessage('', $event->getMessage()));
+        }
+
         $event->setBreadcrumb([]);
 
         return $event;
@@ -78,7 +90,7 @@ final class SentryScrubber
 
         $message = preg_replace('/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/', '[email]', $message) ?? $message;
 
-        return preg_replace('/\d[\d\s-]{7,}\d/', '[number]', $message) ?? $message;
+        return preg_replace('/\d[\d,.\s-]*\d|\d{2,}/', '[number]', $message) ?? $message;
     }
 
     private static function isSensitive(string $key): bool
