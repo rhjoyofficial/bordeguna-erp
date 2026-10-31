@@ -124,7 +124,8 @@ it('does not count last month against this month', function () {
     $old = AssistantMessage::create([
         'business_id' => $this->business->id, 'user_id' => $this->owner->id, 'question' => 'old',
     ]);
-    $old->forceFill(['created_at' => now()->subMonth()])->saveQuietly();
+    // NoOverflow: on the 31st, subMonth() lands on the 1st of THIS month.
+    $old->forceFill(['created_at' => now()->subMonthNoOverflow()])->saveQuietly();
 
     expect(AssistantMessage::usedThisMonth($this->business->id))->toBe(0);
 });
