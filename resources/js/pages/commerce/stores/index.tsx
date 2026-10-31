@@ -91,13 +91,6 @@ export default function StoresIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Stores" />
             <div className="flex flex-col gap-4 p-4">
-                <div className="text-muted-foreground max-w-3xl text-sm">
-                    <p>
-                        Every website the group runs is a store here: its catalogue, its prices, its content and its orders. A store starts as a draft
-                        and cannot go live until it has a theme and a primary domain, because there would be nothing to render.
-                    </p>
-                </div>
-
                 <div className="grid gap-6 lg:grid-cols-3">
                     <form onSubmit={submit} className="border-sidebar-border/70 flex flex-col gap-4 rounded-xl border p-4">
                         <h2 className="font-medium">Add a store</h2>

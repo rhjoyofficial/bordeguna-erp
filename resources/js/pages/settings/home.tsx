@@ -128,7 +128,6 @@ export default function SettingsHome() {
                             <h2 id="settings-shortcuts" className="text-[15px] font-semibold">
                                 Set up inside their own module
                             </h2>
-                            <p className="text-muted-foreground text-xs">They stay where the work happens; listed here so search finds them.</p>
                         </div>
                         <ul className="flex flex-wrap gap-2">
                             {foundShortcuts.map((shortcut) => (
@@ -146,11 +145,6 @@ export default function SettingsHome() {
                         </ul>
                     </section>
                 )}
-
-                <p className="text-muted-foreground text-xs">
-                    Every card and tab opens the screen it always did, at the same address. A card shows only if at least one of its tabs is allowed;
-                    a tab shows only if your role may open it.
-                </p>
             </div>
         </AppLayout>
     );

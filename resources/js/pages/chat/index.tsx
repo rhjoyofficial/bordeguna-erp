@@ -161,7 +161,9 @@ export default function ChatIndex({
                         {creating && (
                             <form onSubmit={submitChannel} className="flex flex-col gap-2 rounded-lg border p-3">
                                 <div className="grid gap-1.5">
-                                    <Label htmlFor="channel_name" required>Name</Label>
+                                    <Label htmlFor="channel_name" required>
+                                        Name
+                                    </Label>
                                     <Input
                                         id="channel_name"
                                         value={channelForm.data.name}
@@ -308,7 +310,7 @@ export default function ChatIndex({
                                 </form>
                             </>
                         ) : (
-                            <p className="text-muted-foreground p-6 text-center text-sm">No channel yet. Create one on the left to start.</p>
+                            <p className="text-muted-foreground p-6 text-center text-sm">No channels yet.</p>
                         )}
                     </section>
                 </div>

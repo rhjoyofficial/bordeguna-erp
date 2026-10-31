@@ -76,13 +76,6 @@ export default function MediaIndex({ media, stores, filters }: { media: MediaRow
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Media" />
             <div className="flex flex-col gap-4 p-4">
-                <div className="text-muted-foreground max-w-3xl text-sm">
-                    <p>
-                        The images your pages are built from, one library per website. Every upload is downscaled and re-encoded on the way in, so
-                        nothing raw off a phone reaches a customer's data plan.
-                    </p>
-                </div>
-
                 {stores.length === 0 ? (
                     <div className="rounded-md border border-dashed p-6 text-sm">
                         <p className="font-medium">There are no stores yet.</p>
