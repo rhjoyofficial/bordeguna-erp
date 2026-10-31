@@ -200,17 +200,17 @@ function cbrCarryBeeOk(Delivery $delivery): void
     ]]], 201)]);
 }
 
-it('pre-selects the brand\'s own account, shows the other brand\'s account disabled with the reason, and keeps any-brand Pathao', function () {
+it('pre-selects the brand\'s own account, still offers the other brand\'s account, and keeps any-brand Pathao (Joy, 31 Oct 2026)', function () {
     $options = cbrOptions($this, cbrChallan($this, $this->lld));
 
     expect($options[$this->cbLaladia->id])->toMatchArray(['available' => true, 'preselected' => true, 'serves_brand' => 'LaLaDia', 'store_name' => 'Store 24869'])
-        ->and($options[$this->cbBionic->id])->toMatchArray(['available' => false, 'preselected' => false, 'unavailable_reason' => 'Bionic carries Bionic-Garden parcels only, not LaLaDia.'])
+        ->and($options[$this->cbBionic->id])->toMatchArray(['available' => true, 'preselected' => false, 'store_name' => 'Store 77001'])
         ->and($options[$this->pathao->id])->toMatchArray(['available' => true, 'preselected' => false, 'serves_brand' => null]);
 
     $options = cbrOptions($this, cbrChallan($this, $this->bnc));
 
     expect($options[$this->cbBionic->id])->toMatchArray(['available' => true, 'preselected' => true, 'store_name' => 'Store 77001'])
-        ->and($options[$this->cbLaladia->id]['available'])->toBeFalse();
+        ->and($options[$this->cbLaladia->id])->toMatchArray(['available' => true, 'preselected' => false]);
 });
 
 it('falls back to the any-brand default when the brand has no account of its own', function () {
@@ -219,7 +219,7 @@ it('falls back to the any-brand default when the brand has no account of its own
     $options = cbrOptions($this, cbrChallan($this, $this->lld));
 
     expect($options[$this->pathao->id])->toMatchArray(['available' => true, 'preselected' => true])
-        ->and($options[$this->cbBionic->id]['available'])->toBeFalse();
+        ->and($options[$this->cbBionic->id])->toMatchArray(['available' => true, 'preselected' => false]);
 });
 
 it('books a brand\'s parcel from that brand\'s pickup store', function () {
@@ -232,15 +232,14 @@ it('books a brand\'s parcel from that brand\'s pickup store', function () {
     expect(CourierBookingRequest::query()->sole()->courier_account_id)->toBe($this->cbBionic->id);
 });
 
-it('refuses on the server an account linked only to the other brand, before anything is written or sent', function () {
+it('books a parcel on an account kept for the other brand from that account\'s own store, when the person chooses it (Joy, 31 Oct 2026)', function () {
     $delivery = cbrChallan($this, $this->lld);
-    Http::fake();
+    cbrCarryBeeOk($delivery);
 
-    cbrBook($this, $delivery, $this->cbBionic)
-        ->assertSessionHasErrors(['courier_account_id' => 'Bionic carries Bionic-Garden parcels only, not LaLaDia.']);
+    cbrBook($this, $delivery, $this->cbBionic)->assertSessionHasNoErrors()->assertSessionHas('success');
 
-    Http::assertNothingSent();
-    expect(CourierBookingRequest::query()->count())->toBe(0);
+    Http::assertSent(fn (Request $request) => $request->url() === CBR_CB.'/api/v2/orders' && $request->data()['store_id'] === '77001');
+    expect(CourierBookingRequest::query()->sole()->courier_account_id)->toBe($this->cbBionic->id);
 });
 
 it('uses an account\'s own link for the brand before its any-brand link', function () {
@@ -259,14 +258,13 @@ it('books an order with no brand through an any-brand account or an account with
     expect($options[$this->cbLaladia->id]['available'])->toBeTrue()
         ->and($options[$this->pathao->id])->toMatchArray(['available' => true, 'preselected' => true]);
 
-    // An account with two brand links and none for any brand cannot choose.
+    // An account with two brand links and none for any brand still takes it,
+    // from its default (else first) store, and is never preselected over Pathao.
     cbrLink($this->cbLaladia, $this->business, $this->money, '77001', $this->bnc->id);
     $options = cbrOptions($this, cbrChallan($this, null));
 
-    expect($options[$this->cbLaladia->id])->toMatchArray([
-        'available' => false,
-        'unavailable_reason' => 'LaLaDia carries Bionic-Garden and LaLaDia parcels only, and this order has no brand. Choose another account.',
-    ]);
+    expect($options[$this->cbLaladia->id])->toMatchArray(['available' => true, 'preselected' => false])
+        ->and($options[$this->pathao->id]['preselected'])->toBeTrue();
 });
 
 it('links an account for one brand from Settings, keeps one default per courier per brand, and stops one link only', function () {

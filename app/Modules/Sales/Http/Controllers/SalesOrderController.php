@@ -1057,8 +1057,12 @@ class SalesOrderController extends Controller
         // this business's own and still in use.
         $businessId = (int) app(BusinessContext::class)->id();
 
-        if (! isset($data['brand_id']) && OrderBrand::options($businessId, activeOnly: true)->isNotEmpty()) {
-            throw ValidationException::withMessages(['brand_id' => 'Choose the brand this order is sold under.']);
+        // ⭐ Order desk (Joy, 31 Oct 2026): one order may hold several brands.
+        // No brand is asked; the order carries its LEAD brand (the biggest
+        // share of the goods), which picks the default courier account and
+        // the zone charge. Each line's own brand comes from its product.
+        if (! isset($data['brand_id'])) {
+            $data['brand_id'] = OrderBrand::leadOf($data['lines']);
         }
 
         // ⭐ B18 (Joy: "Sales dates, current date default selected, can be
@@ -1785,8 +1789,9 @@ class SalesOrderController extends Controller
 
         $agent = CommissionAgents::parse($data['agent'] ?? null);
 
-        if (! isset($data['brand_id']) && $order->brand_id === null && OrderBrand::options($businessId, activeOnly: true)->isNotEmpty()) {
-            throw ValidationException::withMessages(['brand_id' => 'Choose the brand this order is sold under.']);
+        // ⭐ Order desk (31 Oct 2026): the lead brand again, from the lines as edited.
+        if (! isset($data['brand_id'])) {
+            $data['brand_id'] = OrderBrand::leadOf($data['lines']) ?? $order->brand_id;
         }
 
         $deliveryCharge = isset($data['delivery_charge']) && (float) $data['delivery_charge'] > 0

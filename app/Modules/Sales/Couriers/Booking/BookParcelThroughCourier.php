@@ -24,7 +24,6 @@ use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\ParcelWeight;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -298,8 +297,8 @@ class BookParcelThroughCourier
      * active, a pickup store, and the business's own courier money account
      * (1145) with a ledger head.
      *
-     * ⚠ An account linked only to another brand is refused here, on the server,
-     * whatever the form offered (Joy, 11 Oct 2026).
+     * ⭐ An account linked only to another brand books from its own store
+     * (Joy, 31 Oct 2026; was refused from 11 Oct 2026).
      *
      * @return array{0: CourierAccountBusiness, 1: MoneyAccount}
      *
@@ -319,11 +318,14 @@ class BookParcelThroughCourier
             $fail("{$account->label} does not serve this business yet. Link it with a pickup store in Settings > Couriers.");
         }
 
-        $link = CourierAccountBusiness::serving($links, $brandId);
-
-        if ($link === null) {
-            $fail(self::brandRefusal($account, $links, $brandId));
-        }
+        // ⭐ Joy, 31 Oct 2026 (order desk, decision 1): any courier account may
+        // take the whole order. The brand's own link is still used first; an
+        // account kept for another brand books from its own pickup store
+        // (its default link, else its first) instead of refusing. Supersedes
+        // the 11 Oct 2026 refusal. Brand revenue comes from each line's product.
+        $link = CourierAccountBusiness::serving($links, $brandId)
+            ?? $links->firstWhere('is_default', true)
+            ?? $links->first();
 
         $money = self::moneyFor($link, $businessId);
 
@@ -347,26 +349,6 @@ class BookParcelThroughCourier
         }
 
         return $money;
-    }
-
-    /**
-     * Why an account with links here does not serve this order's brand.
-     *
-     * @param  Collection<int, CourierAccountBusiness>  $links
-     */
-    public static function brandRefusal(CourierAccount $account, Collection $links, ?int $brandId): string
-    {
-        $names = Brand::query()->withoutGlobalScopes()
-            ->whereIn('id', $links->pluck('brand_id')->filter()->map(fn ($id) => (int) $id)->unique()->values()->all())
-            ->orderBy('name')->pluck('name')->implode(' and ');
-
-        if ($brandId === null) {
-            return "{$account->label} carries {$names} parcels only, and this order has no brand. Choose another account.";
-        }
-
-        $brand = Brand::query()->withoutGlobalScopes()->whereKey($brandId)->value('name') ?? 'this brand';
-
-        return "{$account->label} carries {$names} parcels only, not {$brand}.";
     }
 
     /**

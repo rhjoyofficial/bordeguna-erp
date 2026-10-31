@@ -76,12 +76,17 @@ class ParcelPresenter
                 $reason = (string) collect($e->errors())->flatten()->first();
             }
 
+            // The order's own brand first; an account kept for another brand
+            // can still take it (Joy, 31 Oct 2026) but is never preselected
+            // over one that serves the brand.
+            $ownBrand = $link !== null && $brandId !== null && (int) $link->brand_id === $brandId;
             $rank = match (true) {
                 $link === null => 9,
-                $brandId !== null && $link->brand_id !== null && $link->is_default => 0,
-                $brandId !== null && $link->brand_id !== null => 1,
+                $ownBrand && $link->is_default => 0,
+                $ownBrand => 1,
                 $link->brand_id === null && $link->is_default => 2,
-                default => 3,
+                $link->brand_id === null => 3,
+                default => 4,
             };
 
             return [

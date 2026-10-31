@@ -3,6 +3,7 @@
 namespace App\Modules\Sales\Support;
 
 use App\Modules\Inventory\Models\Brand;
+use App\Modules\Inventory\Models\Product;
 use Illuminate\Contracts\Database\Query\Builder as BuilderContract;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
@@ -75,6 +76,40 @@ final class OrderBrand
     {
         return Brand::query()->withoutGlobalScopes()->where('business_id', $businessId)->pluck('name', 'id')
             ->mapWithKeys(fn ($name, $id) => [(int) $id => (string) $name])->all();
+    }
+
+    /**
+     * ⭐ Order desk (Joy, 31 Oct 2026): the lead brand of a multi-brand order,
+     * the brand with the biggest share of the goods (quantity x list price,
+     * else quantity), ties to the lower id. Null when no line has a brand.
+     *
+     * @param  list<array{product_id: int|string, quantity: int|float|string}>  $lines
+     */
+    public static function leadOf(array $lines): ?int
+    {
+        $products = Product::query()->whereIn('id', collect($lines)->pluck('product_id')->map(fn ($id) => (int) $id)->all())
+            ->get(['id', 'brand_id', 'mrp'])->keyBy('id');
+        $weight = [];
+
+        foreach ($lines as $line) {
+            $product = $products[(int) $line['product_id']] ?? null;
+
+            if ($product?->brand_id === null) {
+                continue;
+            }
+
+            $price = (float) ($product->mrp ?? 0) > 0 ? (float) $product->mrp : 1.0;
+            $weight[(int) $product->brand_id] = ($weight[(int) $product->brand_id] ?? 0) + (float) $line['quantity'] * $price;
+        }
+
+        if ($weight === []) {
+            return null;
+        }
+
+        ksort($weight);
+        arsort($weight);
+
+        return (int) array_key_first($weight);
     }
 
     /**
