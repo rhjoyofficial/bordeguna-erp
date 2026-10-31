@@ -14,6 +14,8 @@ use App\Modules\Inventory\Actions\ReceiveStockTransfer;
 use App\Modules\Inventory\Corrections\StockTransferActionPolicy;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
+use App\Modules\Inventory\Enums\MaterialKind;
+use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Enums\TransferStatus;
 use App\Modules\Inventory\Models\InventoryAdjustment;
@@ -40,6 +42,44 @@ use RuntimeException;
 
 class StockController extends Controller
 {
+    /** The three tabs of the stock page. */
+    public const KINDS = ['finished', 'raw', 'packaging'];
+
+    /** 1 finished good, 2 raw material, 3 packaging; the order the page lists them in. */
+    private const KIND_RANK_SQL = "case when kp.type = 'finished_good' then 1 when kp.material_kind = 'packaging' then 3 else 2 end";
+
+    /** Narrow a products query to one tab. */
+    public static function ofKind($query, string $kind)
+    {
+        return match ($kind) {
+            'finished' => $query->where('type', ProductType::FinishedGood),
+            'packaging' => $query->where('type', ProductType::RawMaterial)->where('material_kind', MaterialKind::Packaging),
+            default => $query->where('type', ProductType::RawMaterial)->where(fn ($q) => $q->whereNull('material_kind')->orWhere('material_kind', '!=', MaterialKind::Packaging)),
+        };
+    }
+
+    /**
+     * How many products have stock on hand under each tab, for the chosen
+     * warehouse (or all), whatever the other filters say.
+     *
+     * @return array{finished:int, raw:int, packaging:int}
+     */
+    private function kindCounts(string $warehouseId): array
+    {
+        $onHand = StockBatch::query()
+            ->where('status', StockBatchStatus::Active)
+            ->when($warehouseId, fn ($q, $id) => $q->where('warehouse_id', $id))
+            ->select('product_id');
+
+        $counts = [];
+
+        foreach (self::KINDS as $kind) {
+            $counts[$kind] = Product::query()->whereIn('id', $onHand)->where(fn ($q) => self::ofKind($q, $kind))->count();
+        }
+
+        return $counts;
+    }
+
     public function index(Request $request): Response
     {
         $filters = [
@@ -48,6 +88,9 @@ class StockController extends Controller
             // ⭐ Redesign (15 Oct 2026): the two chips beside the warehouses.
             'low' => $request->boolean('low') ? '1' : '',
             'expired' => $request->boolean('expired') ? '1' : '',
+            // ⭐ 31 Oct 2026: finished goods, raw materials and packaging each
+            // on their own tab, so a jar or a label is never read as a product.
+            'kind' => in_array($request->string('kind')->toString(), self::KINDS, true) ? $request->string('kind')->toString() : '',
         ];
 
         $stockByProductWarehouse = StockBatch::query()
@@ -57,6 +100,7 @@ class StockController extends Controller
                 fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")
             ))
             ->when($filters['warehouse_id'], fn ($query, $warehouseId) => $query->where('warehouse_id', $warehouseId))
+            ->when($filters['kind'], fn ($query, $kind) => $query->whereHas('product', fn ($q) => self::ofKind($q, $kind)))
             // ⚠ Low is the product's TOTAL against its threshold (the Low stock
             // screen's rule), not this warehouse's share of it.
             ->when($filters['low'], fn ($query) => $query->whereIn('product_id', $this->lowStockProductIds()))
@@ -71,9 +115,14 @@ class StockController extends Controller
             // on hand and valued, but nothing will pick it until released.
             ->selectRaw('SUM(CASE WHEN held_at IS NOT NULL THEN current_quantity ELSE 0 END) as held_quantity')
             ->groupBy('product_id', 'warehouse_id')
+            // Finished goods first, then raw materials, then packaging, each by
+            // name. A correlated lookup, so it stays valid under GROUP BY.
+            ->orderByRaw('(select '.self::KIND_RANK_SQL.' from products kp where kp.id = stock_batches.product_id)')
+            ->orderByRaw('(select kp.name from products kp where kp.id = stock_batches.product_id)')
+            ->orderBy('warehouse_id')
             // ⚠ The unit rides along: "12" of rice means nothing until it says
             // kg or bags, and the list used to say neither.
-            ->with(['product:id,name,sku,low_stock_threshold,unit_of_measure_id', 'product.unitOfMeasure:id,abbreviation', 'warehouse:id,name,not_for_sale'])
+            ->with(['product:id,name,sku,type,material_kind,low_stock_threshold,unit_of_measure_id', 'product.unitOfMeasure:id,abbreviation', 'warehouse:id,name,not_for_sale'])
             ->paginate(20)
             ->withQueryString();
 
@@ -91,6 +140,7 @@ class StockController extends Controller
 
         return Inertia::render('inventory/stock/index', [
             'stock' => $stockByProductWarehouse,
+            'kind_counts' => $this->kindCounts($filters['warehouse_id']),
             'products' => Product::stocked()->where('is_active', true)
                 ->with('unitOfMeasure:id,abbreviation')
                 ->orderBy('name')

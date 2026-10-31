@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import { type Paginated, type SharedData } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { ArrowLeftRight, ListChecks, PackageMinus, ScanSearch, Search } from 'lucide-react';
-import { FormEventHandler, useEffect, useState, type ReactNode } from 'react';
+import { FormEventHandler, Fragment, useEffect, useState, type ReactNode } from 'react';
 
 interface StockRow {
     product_id: number;
@@ -36,10 +36,26 @@ interface StockRow {
         id: number;
         name: string;
         sku: string;
+        type: string;
+        material_kind: string | null;
         low_stock_threshold: string | null;
         unit_of_measure: { id: number; abbreviation: string } | null;
     };
     warehouse: { id: number; name: string; not_for_sale?: boolean };
+}
+
+type StockKind = 'finished' | 'raw' | 'packaging';
+
+/** The three kinds of thing in a warehouse, in the order the page lists them. */
+const KIND_TABS: { key: StockKind; label: string; hint: string }[] = [
+    { key: 'finished', label: 'Finished goods', hint: 'What we make and sell' },
+    { key: 'raw', label: 'Raw materials', hint: 'What goes into it: oil, fish, pickle, ghee, salt' },
+    { key: 'packaging', label: 'Packaging', hint: 'Jars, bottles, labels, caps, cartons, poly' },
+];
+
+function kindOf(product: { type: string; material_kind: string | null }): StockKind {
+    if (product.type === 'finished_good') return 'finished';
+    return product.material_kind === 'packaging' ? 'packaging' : 'raw';
 }
 
 interface ProductOption {
@@ -894,6 +910,7 @@ function SetupNotice({ children }: { children: ReactNode }) {
 
 export default function StockIndex({
     stock,
+    kind_counts,
     products,
     warehouses,
     default_warehouse_id,
@@ -909,6 +926,7 @@ export default function StockIndex({
     filters: initialFilters,
 }: {
     stock: Paginated<StockRow>;
+    kind_counts: Record<StockKind, number>;
     products: ProductOption[];
     warehouses: Option[];
     default_warehouse_id: number | null;
@@ -922,7 +940,7 @@ export default function StockIndex({
     approval_threshold: string | null;
     awaiting_approval: string | null;
     in_transit_count: number;
-    filters: { search: string; warehouse_id: string; low: string; expired: string };
+    filters: { search: string; warehouse_id: string; low: string; expired: string; kind: string };
 }) {
     const { t } = useTranslation();
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/stock', initialFilters);
@@ -1042,6 +1060,41 @@ export default function StockIndex({
                     </SetupNotice>
                 )}
 
+                <div role="tablist" aria-label="Kind of stock" className="flex flex-wrap gap-2">
+                    {[
+                        { key: '' as const, label: 'Everything', hint: 'Grouped: finished goods, then raw materials, then packaging' },
+                        ...KIND_TABS,
+                    ].map((tab) => {
+                        const active = filters.kind === tab.key;
+                        const count = tab.key === '' ? KIND_TABS.reduce((sum, k) => sum + (kind_counts[k.key] ?? 0), 0) : (kind_counts[tab.key] ?? 0);
+
+                        return (
+                            <button
+                                key={tab.key || 'all'}
+                                type="button"
+                                role="tab"
+                                aria-selected={active}
+                                title={tab.hint}
+                                onClick={() => setFilter('kind', tab.key)}
+                                className={cn(
+                                    'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors',
+                                    active ? 'bg-primary text-primary-foreground border-primary' : 'bg-card hover:bg-muted',
+                                )}
+                            >
+                                {tab.label}
+                                <span
+                                    className={cn(
+                                        'rounded-full px-2 text-xs tabular-nums',
+                                        active ? 'bg-primary-foreground/20' : 'bg-muted text-muted-foreground',
+                                    )}
+                                >
+                                    {count}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+
                 <CompactControls>
                     <div className="flex flex-wrap items-center gap-2">
                         <label className="border-input bg-background flex h-9 w-72 max-w-full items-center gap-2 rounded-md border px-2.5">
@@ -1123,7 +1176,13 @@ export default function StockIndex({
                             </tr>
                         </thead>
                         <tbody>
-                            {stock.data.map((row) => {
+                            {stock.data.map((row, index) => {
+                                const rowKind = kindOf(row.product);
+                                // A heading each time the kind changes (the list is already in kind order).
+                                const heading =
+                                    index === 0 || kindOf(stock.data[index - 1].product) !== rowKind
+                                        ? KIND_TABS.find((k) => k.key === rowKind)
+                                        : null;
                                 const threshold = row.product.low_stock_threshold === null ? null : Number(row.product.low_stock_threshold);
                                 const total = totalOf(row.product_id);
                                 const expired = Number(row.expired_quantity ?? 0);
@@ -1132,95 +1191,104 @@ export default function StockIndex({
                                 const unit = row.product.unit_of_measure?.abbreviation ?? '';
 
                                 return (
-                                    <tr key={`${row.product_id}-${row.warehouse_id}`}>
-                                        <td>
-                                            <Link
-                                                href={`/inventory/products/${row.product_id}`}
-                                                className="font-medium underline-offset-2 hover:underline"
-                                            >
-                                                {row.product.name}
-                                            </Link>{' '}
-                                            <span className="text-muted-foreground font-mono text-xs">{row.product.sku}</span>
-                                        </td>
-                                        <td className="text-muted-foreground">
-                                            {row.warehouse.name}
-                                            {row.warehouse.not_for_sale && (
-                                                <div>
-                                                    <Pill tone="warning">{t('ips.q.badge')}</Pill>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className={cn('text-right tabular-nums', low && 'font-semibold text-amber-700 dark:text-amber-400')}>
-                                            {quantity(row.quantity)}
-                                            {unit && <span className="text-muted-foreground font-normal"> {unit}</span>}
-                                            {expired > 0 && (
-                                                <div className="text-destructive text-xs font-normal">
-                                                    {t('stock.expired_of_which', { quantity: quantity(expired) })}
-                                                </div>
-                                            )}
-                                            {held > 0 && (
-                                                <div className="text-xs font-normal">
-                                                    <Link
-                                                        href={`/inventory/batches?search=${encodeURIComponent(row.product.sku)}`}
-                                                        className="text-amber-700 underline-offset-2 hover:underline dark:text-amber-400"
-                                                    >
-                                                        {quantity(held)} on hold
-                                                    </Link>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="text-right tabular-nums">
-                                            {quantity(row.available ?? row.quantity)}
-                                            {Number(row.reserved ?? 0) > 0 && (
-                                                <div className="text-xs font-normal">
-                                                    <Link
-                                                        href="/sales/reserved-stock"
-                                                        className="text-muted-foreground underline-offset-2 hover:underline"
-                                                    >
-                                                        {t('rsv.line_reserved', { quantity: quantity(row.reserved ?? 0) })}
-                                                    </Link>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td>
-                                            <span className="inline-flex items-center gap-2">
-                                                {expired > 0 ? (
-                                                    <Pill tone="danger">expired</Pill>
-                                                ) : threshold === null ? (
-                                                    <span className="text-muted-foreground text-xs">not set</span>
-                                                ) : low ? (
-                                                    <Pill tone="warning">low</Pill>
-                                                ) : (
-                                                    <Pill tone="ok">ok</Pill>
+                                    <Fragment key={`${row.product_id}-${row.warehouse_id}`}>
+                                        {heading && (
+                                            <tr className="bg-muted/60">
+                                                <td colSpan={6} className="py-2 text-sm font-semibold">
+                                                    {heading.label} <span className="text-muted-foreground font-normal">: {heading.hint}</span>
+                                                </td>
+                                            </tr>
+                                        )}
+                                        <tr>
+                                            <td>
+                                                <Link
+                                                    href={`/inventory/products/${row.product_id}`}
+                                                    className="font-medium underline-offset-2 hover:underline"
+                                                >
+                                                    {row.product.name}
+                                                </Link>{' '}
+                                                <span className="text-muted-foreground font-mono text-xs">{row.product.sku}</span>
+                                            </td>
+                                            <td className="text-muted-foreground">
+                                                {row.warehouse.name}
+                                                {row.warehouse.not_for_sale && (
+                                                    <div>
+                                                        <Pill tone="warning">{t('ips.q.badge')}</Pill>
+                                                    </div>
                                                 )}
-                                                <LevelBar quantity={total} threshold={threshold} />
-                                            </span>
-                                        </td>
-                                        <td className="text-right whitespace-nowrap">
-                                            {row.warehouse.not_for_sale && can_adjust_directly && (
-                                                <>
-                                                    <Button variant="ghost" size="sm" onClick={() => setMovingBack(row)}>
-                                                        {t('ips.back.button')}
-                                                    </Button>
-                                                    {damagedReturnsReason && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="text-destructive"
-                                                            onClick={() => writeOffQuarantine(row)}
+                                            </td>
+                                            <td className={cn('text-right tabular-nums', low && 'font-semibold text-amber-700 dark:text-amber-400')}>
+                                                {quantity(row.quantity)}
+                                                {unit && <span className="text-muted-foreground font-normal"> {unit}</span>}
+                                                {expired > 0 && (
+                                                    <div className="text-destructive text-xs font-normal">
+                                                        {t('stock.expired_of_which', { quantity: quantity(expired) })}
+                                                    </div>
+                                                )}
+                                                {held > 0 && (
+                                                    <div className="text-xs font-normal">
+                                                        <Link
+                                                            href={`/inventory/batches?search=${encodeURIComponent(row.product.sku)}`}
+                                                            className="text-amber-700 underline-offset-2 hover:underline dark:text-amber-400"
                                                         >
-                                                            {t('ips.q.write_off')}
-                                                        </Button>
+                                                            {quantity(held)} on hold
+                                                        </Link>
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="text-right tabular-nums">
+                                                {quantity(row.available ?? row.quantity)}
+                                                {Number(row.reserved ?? 0) > 0 && (
+                                                    <div className="text-xs font-normal">
+                                                        <Link
+                                                            href="/sales/reserved-stock"
+                                                            className="text-muted-foreground underline-offset-2 hover:underline"
+                                                        >
+                                                            {t('rsv.line_reserved', { quantity: quantity(row.reserved ?? 0) })}
+                                                        </Link>
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <span className="inline-flex items-center gap-2">
+                                                    {expired > 0 ? (
+                                                        <Pill tone="danger">expired</Pill>
+                                                    ) : threshold === null ? (
+                                                        <span className="text-muted-foreground text-xs">not set</span>
+                                                    ) : low ? (
+                                                        <Pill tone="warning">low</Pill>
+                                                    ) : (
+                                                        <Pill tone="ok">ok</Pill>
                                                     )}
-                                                </>
-                                            )}
-                                            {!row.warehouse.not_for_sale && expired > 0 && canRaise && expiredReason && (
-                                                <Button variant="ghost" size="sm" className="text-destructive" onClick={() => recordExpired(row)}>
-                                                    Record expired
-                                                </Button>
-                                            )}
-                                        </td>
-                                    </tr>
+                                                    <LevelBar quantity={total} threshold={threshold} />
+                                                </span>
+                                            </td>
+                                            <td className="text-right whitespace-nowrap">
+                                                {row.warehouse.not_for_sale && can_adjust_directly && (
+                                                    <>
+                                                        <Button variant="ghost" size="sm" onClick={() => setMovingBack(row)}>
+                                                            {t('ips.back.button')}
+                                                        </Button>
+                                                        {damagedReturnsReason && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="text-destructive"
+                                                                onClick={() => writeOffQuarantine(row)}
+                                                            >
+                                                                {t('ips.q.write_off')}
+                                                            </Button>
+                                                        )}
+                                                    </>
+                                                )}
+                                                {!row.warehouse.not_for_sale && expired > 0 && canRaise && expiredReason && (
+                                                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => recordExpired(row)}>
+                                                        Record expired
+                                                    </Button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    </Fragment>
                                 );
                             })}
                             {stock.data.length === 0 && (
