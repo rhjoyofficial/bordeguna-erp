@@ -445,7 +445,6 @@ export default function ProductShow({
                             </select>
                         }
                     >
-                        <p className="text-muted-foreground px-4 pb-2 text-xs">{t('product.card_intro')}</p>
                         <CompactTable minWidth="64rem">
                             <thead>
                                 <tr className="text-muted-foreground">

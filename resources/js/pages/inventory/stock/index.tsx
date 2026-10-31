@@ -1003,7 +1003,6 @@ export default function StockIndex({
                 {/* ⚠ The actions sit ABOVE the list (21 Sep 2026). They were two forms
                     under a twenty-row table, so on a phone nobody found them. */}
                 <Toolbar
-                    note={`${stock.total} row${stock.total === 1 ? '' : 's'}: one per product and warehouse. The Overview adds them up.`}
                     actions={
                         <>
                             {/* ⭐ Traceability (17 Oct 2026): from a batch number to its whole trail. */}

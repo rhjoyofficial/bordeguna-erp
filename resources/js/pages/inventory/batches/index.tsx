@@ -1,4 +1,4 @@
-import { CompactTable, inventoryCrumbs, Pill, Toolbar } from '@/components/inventory/inventory-ui';
+import { CompactTable, inventoryCrumbs, Pill } from '@/components/inventory/inventory-ui';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
@@ -35,8 +35,6 @@ export default function BatchesIndex({ batches, search }: { batches: BatchRow[];
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Batches" />
             <div className="flex flex-col gap-4 p-4">
-                <Toolbar note="One row per batch per warehouse. Open a batch to see where it came from, where it went, and to put it on hold." />
-
                 <label className="border-input bg-background flex h-10 w-full max-w-md items-center gap-2 rounded-md border px-2.5">
                     <Search className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
                     <Input
@@ -105,9 +103,7 @@ export default function BatchesIndex({ batches, search }: { batches: BatchRow[];
                         </tbody>
                     </CompactTable>
                 </div>
-                {batches.length === 50 && (
-                    <p className="text-muted-foreground text-xs">Showing the newest 50. Type more of the number to narrow it.</p>
-                )}
+                {batches.length === 50 && <p className="text-muted-foreground text-xs">Newest 50 shown. Type more to narrow.</p>}
             </div>
         </AppLayout>
     );

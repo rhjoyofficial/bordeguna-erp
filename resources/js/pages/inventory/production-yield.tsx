@@ -50,12 +50,7 @@ export default function ProductionYield({ month, products, runs }: { month: stri
             <Head title="Yield report" />
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
-                    <div>
-                        <p className="text-muted-foreground max-w-2xl text-sm">
-                            Where a drifting yield gets noticed. Waste percentages here are value-based: the only ratio that adds up honestly across
-                            kilograms, litres and pieces. Per-unit figures live on each run.
-                        </p>
-                    </div>
+                    <div />
                     <div className="grid gap-2">
                         <Label htmlFor="month">Month</Label>
                         <Input

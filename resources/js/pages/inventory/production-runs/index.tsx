@@ -40,10 +40,7 @@ export default function ProductionRunsIndex({ runs, filters }: { runs: Paginated
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Production runs" />
             <div className="flex flex-col gap-4 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-muted-foreground text-sm">
-                        A run consumes its inputs and makes its output; a draft moves nothing until confirmed.
-                    </p>
+                <div className="flex flex-wrap items-center justify-end gap-3">
                     <div className="flex flex-wrap items-center gap-2">
                         <SearchSelect
                             value={filters.status}

@@ -111,7 +111,7 @@ export default function InventoryDashboard({
                         </CardHeader>
                         <CardContent>
                             {categories.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">No stock is held yet, so there is nothing to distribute.</p>
+                                <p className="text-muted-foreground text-sm">No stock yet.</p>
                             ) : (
                                 <div className="flex flex-col gap-2">
                                     {categories.map((category, index) => (
@@ -138,9 +138,7 @@ export default function InventoryDashboard({
                         </CardHeader>
                         <CardContent>
                             {trendMax <= 0 ? (
-                                <p className="text-muted-foreground text-sm">
-                                    No stock has moved in this window. The chart fills in as receipts, production and sales flow.
-                                </p>
+                                <p className="text-muted-foreground text-sm">No movement in this window.</p>
                             ) : (
                                 <div>
                                     <div className="flex h-36 items-end gap-2">
@@ -211,7 +209,7 @@ export default function InventoryDashboard({
                         </CardHeader>
                         <CardContent>
                             {suppliers.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">No purchases yet. This fills in once goods receipts start landing.</p>
+                                <p className="text-muted-foreground text-sm">No purchases yet.</p>
                             ) : (
                                 <table className="w-full text-sm">
                                     <tbody>
@@ -241,7 +239,7 @@ export default function InventoryDashboard({
                         </CardHeader>
                         <CardContent>
                             {recent_movements.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">Nothing has moved yet. The first receipt or sale starts this list.</p>
+                                <p className="text-muted-foreground text-sm">No movement yet.</p>
                             ) : (
                                 <div className="overflow-x-auto">
                                     <table className="w-full min-w-[32rem] text-sm">

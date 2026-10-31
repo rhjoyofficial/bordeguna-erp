@@ -43,7 +43,6 @@ const qty = (value: number) => value.toLocaleString('en-BD', { maximumFractionDi
 export default function ExpiryIndex({
     expired,
     expiring,
-    default_warning_days,
     within = '',
 }: {
     expired: Row[];
@@ -96,12 +95,12 @@ export default function ExpiryIndex({
                         {rows.length === 0 ? (
                             <p className="text-muted-foreground p-2 text-sm">
                                 {tab === 'expired'
-                                    ? 'No expired stock is being held. Batches with no expiry date never appear here.'
+                                    ? 'No expired stock.'
                                     : within === ''
-                                      ? `Nothing is inside its product's warning window (${default_warning_days} days unless the product sets its own). Batches with no expiry date never appear here.`
+                                      ? 'Nothing expiring soon.'
                                       : within === 'all'
-                                        ? 'No dated stock is being held. Batches with no expiry date never appear here.'
-                                        : `Nothing expires within ${within} days. Batches with no expiry date never appear here.`}
+                                        ? 'No dated stock.'
+                                        : `Nothing expires within ${within} days.`}
                             </p>
                         ) : (
                             <table className="w-full min-w-[52rem] text-sm">

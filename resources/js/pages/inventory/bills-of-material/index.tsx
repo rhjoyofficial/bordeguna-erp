@@ -212,17 +212,12 @@ export default function BillsOfMaterialIndex({
             <div className="flex flex-col gap-4 p-4">
                 {/* No permission check of its own: the whole page needs the same
                     one as saving (inventory.bom.manage). */}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-muted-foreground text-sm">What a run suggests consuming. A recipe posts nothing by itself.</p>
+                <div className="flex flex-wrap items-center justify-end gap-3">
                     <Button onClick={() => setDialog(null)}>New recipe</Button>
                 </div>
 
                 <div className="flex flex-col gap-3">
-                    {boms.length === 0 && (
-                        <div className="text-muted-foreground rounded-lg border p-6 text-center text-sm">
-                            No recipes yet. The first one worth writing is the pickle packing run.
-                        </div>
-                    )}
+                    {boms.length === 0 && <div className="text-muted-foreground rounded-lg border p-6 text-center text-sm">No recipes yet.</div>}
 
                     {boms.map((bom) => (
                         <div key={bom.id} className={`rounded-lg border ${bom.is_active ? '' : 'opacity-60'}`}>

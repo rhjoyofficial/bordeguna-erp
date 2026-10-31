@@ -117,8 +117,7 @@ export default function LowStocksIndex({ low, out, without_threshold }: { low: R
 
                 {without_threshold > 0 && (
                     <p className="text-muted-foreground text-xs">
-                        {without_threshold} in-stock product{without_threshold === 1 ? ' has' : 's have'} no low-stock threshold set, so
-                        {without_threshold === 1 ? ' it' : ' they'} can never appear here. Thresholds are set on the product form.
+                        {without_threshold} in-stock product{without_threshold === 1 ? ' has' : 's have'} no low-stock level.
                     </p>
                 )}
             </div>
