@@ -1103,6 +1103,50 @@ function CreateOrderForm({
     // ⚠ The dialog is a SIBLING of the form, not inside it: React bubbles a
     // portal's submit up the component tree, so adding a customer from inside
     // the form would have recorded the order too.
+    // ⭐ Order desk (31 Oct 2026): the buttons, in the side panel on a wide screen and the footer on a phone.
+    const actions = (
+        <>
+            {!editing && data.delivery_method === 'hand' ? (
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button type="submit" name="then" value="save" variant="outline" disabled={processing || unpriced}>
+                        Save only
+                    </Button>
+                    <Button type="submit" name="then" value="handover" disabled={processing || unpriced} className="w-fit">
+                        Save and hand over
+                    </Button>
+                    <InputError message={lineErrors.then} />
+                </div>
+            ) : canBook ? (
+                <div className="flex flex-wrap items-center gap-2">
+                    <SearchSelect
+                        aria-label="Courier"
+                        className="w-56"
+                        value={data.courier_account_id}
+                        onChange={(e) => setData('courier_account_id', e.target.value)}
+                    >
+                        <option value="">Courier: default for the order</option>
+                        {courierAccounts.map((a) => (
+                            <option key={a.id} value={String(a.id)}>
+                                {a.label}
+                            </option>
+                        ))}
+                    </SearchSelect>
+                    <Button type="submit" name="then" value="save" variant="outline" disabled={processing || unpriced}>
+                        Save only
+                    </Button>
+                    <Button type="submit" name="then" value="book" disabled={processing || unpriced} className="w-fit">
+                        Save and book
+                    </Button>
+                    <InputError message={lineErrors.then ?? lineErrors.courier_account_id} />
+                </div>
+            ) : (
+                <Button disabled={processing || unpriced} className="w-fit">
+                    {editing ? t('corr.sales.order.save') : t('orders.record')}
+                </Button>
+            )}
+        </>
+    );
+
     return (
         <>
             {canAddCustomer && (
@@ -1132,655 +1176,666 @@ function CreateOrderForm({
                     </Button>
                 </div>
 
-                <div className="flex flex-col gap-6 p-4">
-                    {editing && (
-                        <p className="w-fit rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-300">
-                            {partlyDelivered ? t('corr.sales.order.editing_undelivered') : t('corr.sales.order.editing_note')}
-                        </p>
-                    )}
-                    <FormSection title={t('orders.section_order')}>
-                        {/* ⚠ Joy, 17 Oct 2026: one line, each field as wide as it needs. A
-                            wrapping row, not a 4-column grid: the customer grows to 28rem,
-                            brand, warehouse and the dates keep their own width. */}
-                        <div className="flex flex-wrap items-start gap-3">
-                            <div className="grid w-full gap-2 sm:w-40">
-                                <Label htmlFor="order-date" required>
-                                    {t('orders.order_date')}
-                                </Label>
-                                <Input
-                                    id="order-date"
-                                    type="date"
-                                    max={today}
-                                    min={options.may_backdate || editing ? undefined : today}
-                                    value={data.ordered_at}
-                                    onChange={(e) => setData('ordered_at', e.target.value)}
-                                    aria-required
-                                    disabled={partlyDelivered || (!options.may_backdate && !editing)}
-                                />
-                                {!options.may_backdate && !editing && <p className="text-muted-foreground text-xs">{t('och.staff_today')}</p>}
-                                <InputError message={errors.ordered_at} />
-                            </div>
-                            <CustomerLookup
-                                id="order-customer-lookup"
-                                selectedId={data.customer_id}
-                                disabled={partlyDelivered}
-                                onPick={(customer) => {
-                                    beforeLookup.current = data.address;
-                                    pickCustomer(String(customer.id));
-                                }}
-                                onUndo={(previousId) =>
-                                    setData((current) => ({
-                                        ...current,
-                                        customer_id: previousId,
-                                        address: beforeLookup.current ?? current.address,
-                                    }))
-                                }
-                                onNew={
-                                    canAddCustomer
-                                        ? (typed) => {
-                                              setTypedCustomer(typed);
-                                              setQuickOpen(true);
-                                          }
-                                        : undefined
-                                }
-                            />
-                            <div className="grid w-full min-w-0 gap-2 sm:w-auto sm:max-w-md sm:flex-[1_1_18rem]">
-                                <Label required>{t('orders.form_customer')}</Label>
-                                <SearchableSelect
-                                    value={data.customer_id}
-                                    onChange={partlyDelivered ? () => undefined : pickCustomer}
-                                    options={customers.map((c) => ({
-                                        value: String(c.id),
-                                        label: c.phone ? `${c.name} - ${c.phone}` : c.name,
-                                        keywords: c.phone ?? '',
-                                    }))}
-                                    placeholder={t('orders.select_customer')}
-                                    searchPlaceholder={t('orders.name_or_phone')}
-                                    {...(canAddCustomer
-                                        ? {
-                                              onCreate: (typed: string) => {
-                                                  setTypedCustomer(typed);
-                                                  setQuickOpen(true);
-                                              },
-                                              createLabel: t('orders.new_customer'),
-                                          }
-                                        : {})}
-                                />
-                                <InputError message={errors.customer_id} />
-                            </div>
-                            <div className="grid w-full gap-2 sm:w-52">
-                                <Label>{t('orders.warehouse')}</Label>
-                                <SearchableSelect
-                                    value={data.warehouse_id}
-                                    onChange={(v) => setData('warehouse_id', v)}
-                                    options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
-                                    placeholder={t('orders.decided_at_delivery')}
-                                    clearable
-                                    searchPlaceholder={t('orders.search_warehouses')}
-                                />
-                                <InputError message={errors.warehouse_id} />
-                            </div>
-                            <div className="grid w-full gap-2 sm:w-40">
-                                <Label htmlFor="order-expected">{t('orders.expected_date')}</Label>
-                                <Input
-                                    id="order-expected"
-                                    type="date"
-                                    min={data.ordered_at || undefined}
-                                    value={data.expected_date}
-                                    onChange={(e) => setData('expected_date', e.target.value)}
-                                />
-                                <InputError message={errors.expected_date} />
-                            </div>
-                        </div>
-                        {/* ⭐ B18 (25 Oct 2026): how the order came, and the other shop's own number. */}
-                        <div className="flex flex-wrap items-start gap-3">
-                            <div className="grid w-full gap-2 sm:w-52">
-                                <Label htmlFor="order-channel">{t('och.channel')}</Label>
-                                <SearchSelect id="order-channel" value={data.channel} onChange={(e) => setData('channel', e.target.value)}>
-                                    {data.channel === '' && <option value="">{t('och.choose_channel')}</option>}
-                                    {options.channels.map((c) => (
-                                        <option key={c.value} value={c.value}>
-                                            {t(`och.channel.${c.value}` as 'och.channel.phone')}
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                                <InputError message={errors.channel} />
-                            </div>
-                            {data.channel === 'website' && (
-                                <div className="grid w-full gap-2 sm:w-48">
-                                    <Label htmlFor="order-site" required>
-                                        {t('och.site')}
-                                    </Label>
-                                    <SearchSelect
-                                        id="order-site"
-                                        value={options.sites.includes(data.channel_site) || data.channel_site === '' ? data.channel_site : '__other'}
-                                        onChange={(e) => setData('channel_site', e.target.value === '__other' ? ' ' : e.target.value)}
-                                    >
-                                        <option value="">{t('och.choose_channel')}</option>
-                                        {options.sites.map((site) => (
-                                            <option key={site} value={site}>
-                                                {site}
-                                            </option>
-                                        ))}
-                                        <option value="__other">{t('och.site_other')}</option>
-                                    </SearchSelect>
-                                    {!options.sites.includes(data.channel_site) && data.channel_site !== '' && (
-                                        <Input
-                                            aria-label={t('och.site_name')}
-                                            placeholder={t('och.site_name')}
-                                            maxLength={60}
-                                            value={data.channel_site.trim()}
-                                            onChange={(e) => setData('channel_site', e.target.value === '' ? ' ' : e.target.value)}
-                                        />
-                                    )}
-                                    <InputError message={errors.channel_site} />
-                                </div>
-                            )}
-                            <div className="grid w-full gap-2 sm:w-44">
-                                <Label htmlFor="order-reference">{t('och.reference')}</Label>
-                                <Input
-                                    id="order-reference"
-                                    maxLength={60}
-                                    value={data.external_reference}
-                                    onChange={(e) => setData('external_reference', e.target.value)}
-                                />
-                                <InputError message={errors.external_reference} />
-                            </div>
-                        </div>
-                        {(check.duplicate !== null || errors.external_reference) && data.external_reference.trim() !== '' && (
-                            <div className="flex w-fit flex-col gap-1 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-300">
-                                {check.duplicate !== null && <span>{check.duplicate}</span>}
-                                <label className="flex items-center gap-2">
-                                    <Checkbox
-                                        checked={data.allow_duplicate_reference}
-                                        onCheckedChange={(checked) => setData('allow_duplicate_reference', checked === true)}
-                                    />
-                                    {t('och.save_anyway')}
-                                </label>
-                            </div>
-                        )}
-                        {backdated && (
+                <div className="grid gap-6 p-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
+                    <div className="flex min-w-0 flex-col gap-6">
+                        {editing && (
                             <p className="w-fit rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-300">
-                                {t('orders.backdated', { date: showDate(data.ordered_at) })}
+                                {partlyDelivered ? t('corr.sales.order.editing_undelivered') : t('corr.sales.order.editing_note')}
                             </p>
                         )}
+                        <FormSection title={t('orders.section_order')}>
+                            {/* ⚠ Joy, 17 Oct 2026: one line, each field as wide as it needs. A
+                            wrapping row, not a 4-column grid: the customer grows to 28rem,
+                            brand, warehouse and the dates keep their own width. */}
+                            <div className="flex flex-wrap items-start gap-3">
+                                <div className="grid w-full gap-2 sm:w-40">
+                                    <Label htmlFor="order-date" required>
+                                        {t('orders.order_date')}
+                                    </Label>
+                                    <Input
+                                        id="order-date"
+                                        type="date"
+                                        max={today}
+                                        min={options.may_backdate || editing ? undefined : today}
+                                        value={data.ordered_at}
+                                        onChange={(e) => setData('ordered_at', e.target.value)}
+                                        aria-required
+                                        disabled={partlyDelivered || (!options.may_backdate && !editing)}
+                                    />
+                                    {!options.may_backdate && !editing && <p className="text-muted-foreground text-xs">{t('och.staff_today')}</p>}
+                                    <InputError message={errors.ordered_at} />
+                                </div>
+                                <CustomerLookup
+                                    id="order-customer-lookup"
+                                    selectedId={data.customer_id}
+                                    disabled={partlyDelivered}
+                                    onPick={(customer) => {
+                                        beforeLookup.current = data.address;
+                                        pickCustomer(String(customer.id));
+                                    }}
+                                    onUndo={(previousId) =>
+                                        setData((current) => ({
+                                            ...current,
+                                            customer_id: previousId,
+                                            address: beforeLookup.current ?? current.address,
+                                        }))
+                                    }
+                                    onNew={
+                                        canAddCustomer
+                                            ? (typed) => {
+                                                  setTypedCustomer(typed);
+                                                  setQuickOpen(true);
+                                              }
+                                            : undefined
+                                    }
+                                />
+                                <div className="grid w-full min-w-0 gap-2 sm:w-auto sm:max-w-md sm:flex-[1_1_18rem]">
+                                    <Label required>{t('orders.form_customer')}</Label>
+                                    <SearchableSelect
+                                        value={data.customer_id}
+                                        onChange={partlyDelivered ? () => undefined : pickCustomer}
+                                        options={customers.map((c) => ({
+                                            value: String(c.id),
+                                            label: c.phone ? `${c.name} - ${c.phone}` : c.name,
+                                            keywords: c.phone ?? '',
+                                        }))}
+                                        placeholder={t('orders.select_customer')}
+                                        searchPlaceholder={t('orders.name_or_phone')}
+                                        {...(canAddCustomer
+                                            ? {
+                                                  onCreate: (typed: string) => {
+                                                      setTypedCustomer(typed);
+                                                      setQuickOpen(true);
+                                                  },
+                                                  createLabel: t('orders.new_customer'),
+                                              }
+                                            : {})}
+                                    />
+                                    <InputError message={errors.customer_id} />
+                                </div>
+                                <div className="grid w-full gap-2 sm:w-52">
+                                    <Label>{t('orders.warehouse')}</Label>
+                                    <SearchableSelect
+                                        value={data.warehouse_id}
+                                        onChange={(v) => setData('warehouse_id', v)}
+                                        options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+                                        placeholder={t('orders.decided_at_delivery')}
+                                        clearable
+                                        searchPlaceholder={t('orders.search_warehouses')}
+                                    />
+                                    <InputError message={errors.warehouse_id} />
+                                </div>
+                                <div className="grid w-full gap-2 sm:w-40">
+                                    <Label htmlFor="order-expected">{t('orders.expected_date')}</Label>
+                                    <Input
+                                        id="order-expected"
+                                        type="date"
+                                        min={data.ordered_at || undefined}
+                                        value={data.expected_date}
+                                        onChange={(e) => setData('expected_date', e.target.value)}
+                                    />
+                                    <InputError message={errors.expected_date} />
+                                </div>
+                            </div>
+                            {/* ⭐ B18 (25 Oct 2026): how the order came, and the other shop's own number. */}
+                            <div className="flex flex-wrap items-start gap-3">
+                                <div className="grid w-full gap-2 sm:w-52">
+                                    <Label htmlFor="order-channel">{t('och.channel')}</Label>
+                                    <SearchSelect id="order-channel" value={data.channel} onChange={(e) => setData('channel', e.target.value)}>
+                                        {data.channel === '' && <option value="">{t('och.choose_channel')}</option>}
+                                        {options.channels.map((c) => (
+                                            <option key={c.value} value={c.value}>
+                                                {t(`och.channel.${c.value}` as 'och.channel.phone')}
+                                            </option>
+                                        ))}
+                                    </SearchSelect>
+                                    <InputError message={errors.channel} />
+                                </div>
+                                {data.channel === 'website' && (
+                                    <div className="grid w-full gap-2 sm:w-48">
+                                        <Label htmlFor="order-site" required>
+                                            {t('och.site')}
+                                        </Label>
+                                        <SearchSelect
+                                            id="order-site"
+                                            value={
+                                                options.sites.includes(data.channel_site) || data.channel_site === '' ? data.channel_site : '__other'
+                                            }
+                                            onChange={(e) => setData('channel_site', e.target.value === '__other' ? ' ' : e.target.value)}
+                                        >
+                                            <option value="">{t('och.choose_channel')}</option>
+                                            {options.sites.map((site) => (
+                                                <option key={site} value={site}>
+                                                    {site}
+                                                </option>
+                                            ))}
+                                            <option value="__other">{t('och.site_other')}</option>
+                                        </SearchSelect>
+                                        {!options.sites.includes(data.channel_site) && data.channel_site !== '' && (
+                                            <Input
+                                                aria-label={t('och.site_name')}
+                                                placeholder={t('och.site_name')}
+                                                maxLength={60}
+                                                value={data.channel_site.trim()}
+                                                onChange={(e) => setData('channel_site', e.target.value === '' ? ' ' : e.target.value)}
+                                            />
+                                        )}
+                                        <InputError message={errors.channel_site} />
+                                    </div>
+                                )}
+                                <div className="grid w-full gap-2 sm:w-44">
+                                    <Label htmlFor="order-reference">{t('och.reference')}</Label>
+                                    <Input
+                                        id="order-reference"
+                                        maxLength={60}
+                                        value={data.external_reference}
+                                        onChange={(e) => setData('external_reference', e.target.value)}
+                                    />
+                                    <InputError message={errors.external_reference} />
+                                </div>
+                            </div>
+                            {(check.duplicate !== null || errors.external_reference) && data.external_reference.trim() !== '' && (
+                                <div className="flex w-fit flex-col gap-1 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-300">
+                                    {check.duplicate !== null && <span>{check.duplicate}</span>}
+                                    <label className="flex items-center gap-2">
+                                        <Checkbox
+                                            checked={data.allow_duplicate_reference}
+                                            onCheckedChange={(checked) => setData('allow_duplicate_reference', checked === true)}
+                                        />
+                                        {t('och.save_anyway')}
+                                    </label>
+                                </div>
+                            )}
+                            {backdated && (
+                                <p className="w-fit rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-300">
+                                    {t('orders.backdated', { date: showDate(data.ordered_at) })}
+                                </p>
+                            )}
 
-                        {/* ⚠ Re-check F43, 17 Oct 2026: the exposure line used to appear
+                            {/* ⚠ Re-check F43, 17 Oct 2026: the exposure line used to appear
                             under the fields after the customer was picked, pushing the lines
                             down as the next click landed. Now one slot of fixed height holds
                             "pick a customer first", then the exposure in the same place. */}
-                        <div className="min-h-[3.25rem]">
-                            {data.customer_id ? (
-                                <ExposureBox customerId={data.customer_id} />
-                            ) : (
-                                <p className="text-muted-foreground py-3 text-sm">{t('orders.pick_customer_first')}</p>
-                            )}
-                        </div>
-                    </FormSection>
+                            <div className="min-h-[3.25rem]">{data.customer_id ? <ExposureBox customerId={data.customer_id} /> : null}</div>
+                        </FormSection>
 
-                    <FormSection title={t('orders.section_items')} hint={canOverridePrice ? t('orders.items_hint') : undefined}>
-                        <div className="flex flex-col gap-3">
-                            <div className={`text-muted-foreground hidden gap-2 text-xs sm:grid ${LINE_COLUMNS}`}>
-                                <span>#</span>
-                                <span>
-                                    {t('orders.product')}
-                                    <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
-                                        *
+                        <FormSection title={t('orders.section_items')}>
+                            <div className="flex flex-col gap-3">
+                                <div className={`text-muted-foreground hidden gap-2 text-xs sm:grid ${LINE_COLUMNS}`}>
+                                    <span>#</span>
+                                    <span>
+                                        {t('orders.product')}
+                                        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                            *
+                                        </span>
                                     </span>
-                                </span>
-                                <span className="text-right">
-                                    {t('orders.quantity')}
-                                    <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
-                                        *
+                                    <span className="text-right">
+                                        {t('orders.quantity')}
+                                        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                            *
+                                        </span>
                                     </span>
-                                </span>
-                                <span className="text-right">{t('orders.unit_price')}</span>
-                                <span className="text-right">{t('orders.line_total')}</span>
-                                <span>{t('salesctl.disc.heading')}</span>
-                                <span className="w-16" />
-                            </div>
-                            {data.lines.map((line, index) => (
-                                <OrderLineRow
-                                    key={line.uid}
-                                    line={line}
-                                    index={index}
-                                    customerId={data.customer_id}
-                                    warehouseId={data.warehouse_id}
-                                    orderDate={data.ordered_at}
-                                    products={products}
-                                    price={prices[line.uid]}
-                                    canOverride={canOverridePrice}
-                                    canRemove={data.lines.length > 1}
-                                    errors={lineErrors}
-                                    onChange={(patch) => updateLine(line.uid, patch)}
-                                    onPriced={(price) => setPrices((current) => ({ ...current, [line.uid]: price }))}
-                                    onRemove={() => removeLine(line.uid)}
-                                    brandNames={brandNames}
-                                    discountCap={discountCap}
-                                />
-                            ))}
-                        </div>
-                        {data.lines
-                            .map((line, index) => ({ line, index }))
-                            .filter(({ line }) => (line.delivered ?? 0) > 0)
-                            .map(({ line, index }) => (
-                                <p key={line.uid} className="text-muted-foreground text-xs">
-                                    #{index + 1}: {t('corr.sales.order.delivered_already', { quantity: formatQuantity(String(line.delivered)) })}
-                                </p>
-                            ))}
-                        {/* As wide as the line columns, so the summary sits under the money. */}
-                        <div className="flex flex-wrap items-start justify-between gap-4 sm:max-w-[64rem]">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="w-fit"
-                                onClick={() => setData('lines', [...data.lines, newLine()])}
-                            >
-                                {t('orders.add_line')}
-                            </Button>
-                            <dl className="border-sidebar-border/70 dark:border-sidebar-border grid w-full grid-cols-[1fr_auto] gap-x-6 gap-y-1 rounded-lg border p-3 text-sm sm:w-80">
-                                <dt className="text-muted-foreground">{t('orders.summary_lines', { count: pricedLines })}</dt>
-                                <dd className="text-right tabular-nums">{money(goods)}</dd>
-                                {discounts > 0 && (
-                                    <>
-                                        <dt className="text-muted-foreground">{t('salesctl.disc.summary')}</dt>
-                                        <dd className="text-right tabular-nums">-{money(discounts)}</dd>
-                                    </>
-                                )}
-                                {orderDiscount > 0 && (
-                                    <>
-                                        <dt className="text-muted-foreground">{t('och.summary_order_discount')}</dt>
-                                        <dd className="text-right tabular-nums">-{money(orderDiscount)}</dd>
-                                    </>
-                                )}
-                                <dt className="text-muted-foreground">{t('orders.summary_delivery')}</dt>
-                                <dd className="text-right tabular-nums">{money(chargeValue)}</dd>
-                                <dt className="border-sidebar-border/70 dark:border-sidebar-border mt-1 border-t pt-1 font-medium">
-                                    {t('orders.order_total')}
-                                </dt>
-                                <dd className="border-sidebar-border/70 dark:border-sidebar-border mt-1 border-t pt-1 text-right font-semibold tabular-nums">
-                                    {money(total)}
-                                </dd>
-                            </dl>
-                        </div>
-                        <InputError message={errors.lines} />
-                        <InputError message={(errors as Record<string, string | undefined>).exchange_for_sales_return_id} />
-                        {/* ⭐ B18: a discount on the whole order, on top of the lines, within the cap. */}
-                        <div className="grid w-fit gap-1">
-                            <Label htmlFor="order-discount">{t('och.order_discount')}</Label>
-                            <Input
-                                id="order-discount"
-                                type="number"
-                                inputMode="decimal"
-                                min={0}
-                                step="0.01"
-                                className="w-36 text-right"
-                                value={data.order_discount}
-                                onChange={(e) => setData('order_discount', e.target.value)}
-                                placeholder="0"
-                            />
-                            <p className="text-muted-foreground text-xs">{t('och.order_discount_hint')}</p>
-                            <InputError message={(errors as Record<string, string | undefined>).order_discount} />
-                        </div>
-                    </FormSection>
-
-                    {/* F35 + F36: what the customer pays for delivery, and where the
-                        parcel goes. Needed to book a courier from the order. */}
-                    <FormSection title={t('orders.section_delivery')} hint={t('orders.delivery_address_hint')}>
-                        {/* ⭐ B18 (25 Oct 2026): how it travels. A hand delivery needs no
-                            address (24 Oct 2026); a courier takes the zone charge. */}
-                        <div className="flex flex-wrap items-start gap-3">
-                            <div className="grid w-full gap-1 sm:w-64">
-                                <Label htmlFor="order-method">{t('och.delivery_method')}</Label>
-                                <SearchSelect id="order-method" value={data.delivery_method} onChange={(e) => pickMethod(e.target.value)}>
-                                    <option value="">{t('och.choose_channel')}</option>
-                                    {options.delivery_methods.map((m) => (
-                                        <option key={m.value} value={m.value}>
-                                            {t(`och.method.${m.value}` as 'och.method.courier')}
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                                {data.delivery_method === 'hand' && <p className="text-muted-foreground text-xs">{t('och.hand_no_charge')}</p>}
-                                <InputError message={(errors as Record<string, string | undefined>).delivery_method} />
-                            </div>
-                            {data.delivery_method === 'own_staff' && (
-                                <>
-                                    <div className="grid w-full gap-1 sm:w-56">
-                                        <Label htmlFor="order-rider">{t('och.rider')}</Label>
-                                        <SearchSelect
-                                            id="order-rider"
-                                            value={data.rider_employee_id}
-                                            onChange={(e) => {
-                                                // ⭐ IP1 meets IP16: the person's own Employee cash account
-                                                // is where what he collects goes, unless another is chosen.
-                                                const riderId = e.target.value;
-                                                const own = options.cash_accounts.find(
-                                                    (a) => a.holder_employee_id != null && String(a.holder_employee_id) === riderId,
-                                                );
-                                                setData((current) => ({
-                                                    ...current,
-                                                    rider_employee_id: riderId,
-                                                    cod_money_account_id: own ? String(own.id) : current.cod_money_account_id,
-                                                }));
-                                            }}
-                                        >
-                                            <option value="">{t('och.choose_rider')}</option>
-                                            {options.riders.map((r) => (
-                                                <option key={r.id} value={String(r.id)}>
-                                                    {r.name}
-                                                </option>
-                                            ))}
-                                        </SearchSelect>
-                                    </div>
-                                    <div className="grid w-full gap-1 sm:w-56">
-                                        <Label htmlFor="order-cod-account">{t('och.cod_account')}</Label>
-                                        <SearchSelect
-                                            id="order-cod-account"
-                                            value={data.cod_money_account_id}
-                                            onChange={(e) => setData('cod_money_account_id', e.target.value)}
-                                        >
-                                            <option value="">{t('och.choose_channel')}</option>
-                                            {options.cash_accounts.map((a) => (
-                                                <option key={a.id} value={String(a.id)}>
-                                                    {a.name}
-                                                </option>
-                                            ))}
-                                        </SearchSelect>
-                                        <p className="text-muted-foreground max-w-xs text-xs">{t('och.cod_account_hint')}</p>
-                                        <InputError message={(errors as Record<string, string | undefined>).cod_money_account_id} />
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                        {savedAddressHint !== null && (
-                            <p className="text-muted-foreground text-xs">{t('orders.saved_address_hint', { address: savedAddressHint })}</p>
-                        )}
-                        {/* ⚠ Joy, 17 Oct 2026: each field as wide as what goes in it.
-                            Who and where on one wrapping row, the street and landmark
-                            on the next, the charge and the weight on the last. */}
-                        {!data.hand_over && (
-                            <>
-                                <div className="flex flex-wrap items-start gap-3">
-                                    <div className="grid w-full gap-1 sm:w-56">
-                                        <Label htmlFor="addr-name">{t('orders.recipient_name')}</Label>
-                                        <Input id="addr-name" value={data.address.name} onChange={(e) => setAddress({ name: e.target.value })} />
-                                        <InputError message={addressErrors['address.name']} />
-                                    </div>
-                                    <div className="grid w-full gap-1 sm:w-40">
-                                        <Label htmlFor="addr-phone">{t('orders.recipient_phone')}</Label>
-                                        <Input
-                                            id="addr-phone"
-                                            inputMode="tel"
-                                            value={data.address.phone}
-                                            onChange={(e) => setAddress({ phone: e.target.value })}
-                                        />
-                                        <InputError message={addressErrors['address.phone']} />
-                                    </div>
-                                    <BdPlaceFields
-                                        idPrefix="order-place"
-                                        itemClassName="grid w-full gap-1 sm:w-48"
-                                        districts={districts}
-                                        value={{ district: data.address.district, thana: data.address.thana, area: data.address.area }}
-                                        onChange={(place) => setAddress(place)}
-                                        errors={{
-                                            district: addressErrors['address.district'],
-                                            thana: addressErrors['address.thana'],
-                                            area: addressErrors['address.area'],
-                                        }}
-                                    />
+                                    <span className="text-right">{t('orders.unit_price')}</span>
+                                    <span className="text-right">{t('orders.line_total')}</span>
+                                    <span>{t('salesctl.disc.heading')}</span>
+                                    <span className="w-16" />
                                 </div>
-                                <div className="flex flex-wrap items-start gap-3">
-                                    <div className="grid w-full min-w-0 gap-1 sm:w-auto sm:max-w-xl sm:flex-[1_1_20rem]">
-                                        <Label htmlFor="addr-line">{t('orders.address_line')}</Label>
-                                        <Input
-                                            id="addr-line"
-                                            value={data.address.address_line}
-                                            onChange={(e) => setAddress({ address_line: e.target.value })}
-                                        />
-                                        <InputError message={addressErrors['address.address_line']} />
-                                    </div>
-                                    <div className="grid w-full gap-1 sm:w-60">
-                                        <Label htmlFor="addr-landmark">{t('orders.landmark')}</Label>
-                                        <Input
-                                            id="addr-landmark"
-                                            value={data.address.landmark}
-                                            onChange={(e) => setAddress({ landmark: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                        <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
-                            {data.delivery_method !== 'hand' && (
-                                <div className="grid gap-1">
-                                    <Label htmlFor="order-delivery-charge">
-                                        {data.delivery_method === 'courier'
-                                            ? t('och.courier_charge')
-                                            : data.delivery_method === ''
-                                              ? t('orders.delivery_charge')
-                                              : t('och.typed_charge')}
-                                    </Label>
-                                    <Input
-                                        id="order-delivery-charge"
-                                        type="number"
-                                        inputMode="decimal"
-                                        min={0}
-                                        step="0.01"
-                                        className="w-36 text-right"
-                                        value={data.delivery_charge}
-                                        onChange={(e) => setData('delivery_charge', e.target.value)}
-                                        placeholder="0"
-                                        readOnly={data.delivery_method === 'courier' && !options.may_change_courier_charge}
+                                {data.lines.map((line, index) => (
+                                    <OrderLineRow
+                                        key={line.uid}
+                                        line={line}
+                                        index={index}
+                                        customerId={data.customer_id}
+                                        warehouseId={data.warehouse_id}
+                                        orderDate={data.ordered_at}
+                                        products={products}
+                                        price={prices[line.uid]}
+                                        canOverride={canOverridePrice}
+                                        canRemove={data.lines.length > 1}
+                                        errors={lineErrors}
+                                        onChange={(patch) => updateLine(line.uid, patch)}
+                                        onPriced={(price) => setPrices((current) => ({ ...current, [line.uid]: price }))}
+                                        onRemove={() => removeLine(line.uid)}
+                                        brandNames={brandNames}
+                                        discountCap={discountCap}
                                     />
-                                    <p className="text-muted-foreground max-w-xs text-xs">
-                                        {data.delivery_method === 'courier'
-                                            ? check.courier_zone === null
-                                                ? t('och.courier_pick_district')
-                                                : options.may_change_courier_charge
-                                                  ? t('och.courier_zone_owner', { zone: check.courier_zone, charge: courierCharge ?? '' })
-                                                  : t('och.courier_zone', { zone: check.courier_zone })
-                                            : t('orders.delivery_charge_hint')}
+                                ))}
+                            </div>
+                            {data.lines
+                                .map((line, index) => ({ line, index }))
+                                .filter(({ line }) => (line.delivered ?? 0) > 0)
+                                .map(({ line, index }) => (
+                                    <p key={line.uid} className="text-muted-foreground text-xs">
+                                        #{index + 1}: {t('corr.sales.order.delivered_already', { quantity: formatQuantity(String(line.delivered)) })}
                                     </p>
-                                    <InputError message={errors.delivery_charge} />
-                                </div>
-                            )}
-                            <div className="grid gap-1">
-                                <Label htmlFor="order-weight">{t('orders.parcel_weight')}</Label>
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <Input
-                                        id="order-weight"
-                                        type="number"
-                                        inputMode="numeric"
-                                        min={1}
-                                        step={1}
-                                        className="w-36 text-right"
-                                        value={data.weight_grams}
-                                        onChange={(e) => setData('weight_grams', e.target.value)}
-                                        placeholder={weight.missing === 0 && weightGrams > 0 ? String(weightGrams) : ''}
-                                    />
-                                    <span className="text-muted-foreground text-sm tabular-nums">
-                                        {weight.missing === 0
-                                            ? t('orders.weight_from_lines', { grams: weightGrams.toLocaleString('en-IN') })
-                                            : t('orders.weight_at_least', { grams: weightGrams.toLocaleString('en-IN') })}
-                                    </span>
-                                    {weight.missing > 0 && (
-                                        <Badge variant="outline" className="text-amber-700 dark:text-amber-400">
-                                            {t('orders.weight_missing_items', { count: weight.missing })}
-                                        </Badge>
-                                    )}
-                                </div>
-                                <p className="text-muted-foreground text-xs">{t('orders.weight_hint')}</p>
-                                <InputError message={errors.weight_grams} />
-                            </div>
-                        </div>
-                    </FormSection>
-
-                    {/* ⭐ B18 (25 Oct 2026): mostly cash on delivery, some paid by SSL, some paid before. */}
-                    <FormSection title={t('och.payment')}>
-                        <div className="flex flex-wrap items-start gap-3">
-                            <div className="grid w-full gap-1 sm:w-56">
-                                <Label htmlFor="order-payment">{t('och.payment')}</Label>
-                                <SearchSelect
-                                    id="order-payment"
-                                    value={data.payment}
-                                    onChange={(e) => {
-                                        setData('payment', e.target.value);
-                                        // Answer 9: the SSL money waits in SSL Commerz Clearing until SSL pays out.
-                                        if (e.target.value === 'ssl_paid' && data.paid_money_account_id === '' && options.ssl_clearing_id) {
-                                            setData('paid_money_account_id', String(options.ssl_clearing_id));
-                                        }
-                                    }}
+                                ))}
+                            {/* As wide as the line columns, so the summary sits under the money. */}
+                            <div className="flex flex-wrap items-start justify-between gap-4 sm:max-w-[64rem]">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-fit"
+                                    onClick={() => setData('lines', [...data.lines, newLine()])}
                                 >
-                                    {options.payments.map((p) => (
-                                        <option key={p.value} value={p.value}>
-                                            {t(`och.pay.${p.value}` as 'och.pay.cod')}
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                                {data.payment === 'advance' && <p className="text-muted-foreground max-w-xs text-xs">{t('och.advance_hint')}</p>}
+                                    {t('orders.add_line')}
+                                </Button>
+                                <dl className="border-sidebar-border/70 dark:border-sidebar-border grid w-full grid-cols-[1fr_auto] gap-x-6 gap-y-1 rounded-lg border p-3 text-sm sm:w-80">
+                                    <dt className="text-muted-foreground">{t('orders.summary_lines', { count: pricedLines })}</dt>
+                                    <dd className="text-right tabular-nums">{money(goods)}</dd>
+                                    {discounts > 0 && (
+                                        <>
+                                            <dt className="text-muted-foreground">{t('salesctl.disc.summary')}</dt>
+                                            <dd className="text-right tabular-nums">-{money(discounts)}</dd>
+                                        </>
+                                    )}
+                                    {orderDiscount > 0 && (
+                                        <>
+                                            <dt className="text-muted-foreground">{t('och.summary_order_discount')}</dt>
+                                            <dd className="text-right tabular-nums">-{money(orderDiscount)}</dd>
+                                        </>
+                                    )}
+                                    <dt className="text-muted-foreground">{t('orders.summary_delivery')}</dt>
+                                    <dd className="text-right tabular-nums">{money(chargeValue)}</dd>
+                                    <dt className="border-sidebar-border/70 dark:border-sidebar-border mt-1 border-t pt-1 font-medium">
+                                        {t('orders.order_total')}
+                                    </dt>
+                                    <dd className="border-sidebar-border/70 dark:border-sidebar-border mt-1 border-t pt-1 text-right font-semibold tabular-nums">
+                                        {money(total)}
+                                    </dd>
+                                </dl>
                             </div>
-                            {data.payment === 'ssl_paid' && !editing && options.paid_accounts.length > 0 && (
-                                <>
-                                    <div className="grid w-full gap-1 sm:w-56">
-                                        <Label htmlFor="order-paid-into">{t('och.paid_into')}</Label>
-                                        <SearchSelect
-                                            id="order-paid-into"
-                                            value={data.paid_money_account_id}
-                                            onChange={(e) => setData('paid_money_account_id', e.target.value)}
-                                        >
-                                            <option value="">{t('och.choose_channel')}</option>
-                                            {options.paid_accounts.map((a) => (
-                                                <option key={a.id} value={String(a.id)}>
-                                                    {a.name}
-                                                </option>
-                                            ))}
-                                        </SearchSelect>
-                                        <p className="text-muted-foreground max-w-xs text-xs">{t('och.paid_into_hint')}</p>
-                                        <InputError message={(errors as Record<string, string | undefined>).paid_money_account_id} />
-                                    </div>
-                                    <div className="grid w-full gap-1 sm:w-48">
-                                        <Label htmlFor="order-paid-ref">{t('och.paid_reference')}</Label>
-                                        <Input
-                                            id="order-paid-ref"
-                                            maxLength={255}
-                                            value={data.paid_reference}
-                                            onChange={(e) => setData('paid_reference', e.target.value)}
-                                        />
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                        {!editing && payAccounts.length > 0 && (
-                            <div className="mt-3 grid gap-2">
-                                <Label>Paid with the order</Label>
-                                {data.payments.map((row, index) => (
-                                    <div key={index} className="flex flex-wrap items-start gap-2">
+                            <InputError message={errors.lines} />
+                            <InputError message={(errors as Record<string, string | undefined>).exchange_for_sales_return_id} />
+                            {/* ⭐ B18: a discount on the whole order, on top of the lines, within the cap. */}
+                            <div className="grid w-fit gap-1">
+                                <Label htmlFor="order-discount">{t('och.order_discount')}</Label>
+                                <Input
+                                    id="order-discount"
+                                    type="number"
+                                    inputMode="decimal"
+                                    min={0}
+                                    step="0.01"
+                                    className="w-36 text-right"
+                                    value={data.order_discount}
+                                    onChange={(e) => setData('order_discount', e.target.value)}
+                                    placeholder="0"
+                                />
+                                <InputError message={(errors as Record<string, string | undefined>).order_discount} />
+                            </div>
+                        </FormSection>
+
+                        {/* F35 + F36: what the customer pays for delivery, and where the
+                        parcel goes. Needed to book a courier from the order. */}
+                        <FormSection title={t('orders.section_delivery')}>
+                            {/* ⭐ B18 (25 Oct 2026): how it travels. A hand delivery needs no
+                            address (24 Oct 2026); a courier takes the zone charge. */}
+                            <div className="flex flex-wrap items-start gap-3">
+                                <div className="grid w-full gap-1 sm:w-64">
+                                    <Label htmlFor="order-method">{t('och.delivery_method')}</Label>
+                                    <SearchSelect id="order-method" value={data.delivery_method} onChange={(e) => pickMethod(e.target.value)}>
+                                        <option value="">{t('och.choose_channel')}</option>
+                                        {options.delivery_methods.map((m) => (
+                                            <option key={m.value} value={m.value}>
+                                                {t(`och.method.${m.value}` as 'och.method.courier')}
+                                            </option>
+                                        ))}
+                                    </SearchSelect>
+                                    {data.delivery_method === 'hand' && <p className="text-muted-foreground text-xs">{t('och.hand_no_charge')}</p>}
+                                    <InputError message={(errors as Record<string, string | undefined>).delivery_method} />
+                                </div>
+                                {data.delivery_method === 'own_staff' && (
+                                    <>
                                         <div className="grid w-full gap-1 sm:w-56">
+                                            <Label htmlFor="order-rider">{t('och.rider')}</Label>
                                             <SearchSelect
-                                                aria-label="Paid into"
-                                                value={row.money_account_id}
-                                                onChange={(e) => setPayment(index, { money_account_id: e.target.value })}
+                                                id="order-rider"
+                                                value={data.rider_employee_id}
+                                                onChange={(e) => {
+                                                    // ⭐ IP1 meets IP16: the person's own Employee cash account
+                                                    // is where what he collects goes, unless another is chosen.
+                                                    const riderId = e.target.value;
+                                                    const own = options.cash_accounts.find(
+                                                        (a) => a.holder_employee_id != null && String(a.holder_employee_id) === riderId,
+                                                    );
+                                                    setData((current) => ({
+                                                        ...current,
+                                                        rider_employee_id: riderId,
+                                                        cod_money_account_id: own ? String(own.id) : current.cod_money_account_id,
+                                                    }));
+                                                }}
                                             >
-                                                <option value="">Paid into</option>
-                                                {payAccounts.map((a) => (
+                                                <option value="">{t('och.choose_rider')}</option>
+                                                {options.riders.map((r) => (
+                                                    <option key={r.id} value={String(r.id)}>
+                                                        {r.name}
+                                                    </option>
+                                                ))}
+                                            </SearchSelect>
+                                        </div>
+                                        <div className="grid w-full gap-1 sm:w-56">
+                                            <Label htmlFor="order-cod-account">{t('och.cod_account')}</Label>
+                                            <SearchSelect
+                                                id="order-cod-account"
+                                                value={data.cod_money_account_id}
+                                                onChange={(e) => setData('cod_money_account_id', e.target.value)}
+                                            >
+                                                <option value="">{t('och.choose_channel')}</option>
+                                                {options.cash_accounts.map((a) => (
                                                     <option key={a.id} value={String(a.id)}>
                                                         {a.name}
                                                     </option>
                                                 ))}
                                             </SearchSelect>
-                                            <InputError message={lineErrors[`payments.${index}.money_account_id`]} />
+                                            <p className="text-muted-foreground max-w-xs text-xs">{t('och.cod_account_hint')}</p>
+                                            <InputError message={(errors as Record<string, string | undefined>).cod_money_account_id} />
                                         </div>
-                                        <div className="grid w-full gap-1 sm:w-32">
+                                    </>
+                                )}
+                            </div>
+                            {savedAddressHint !== null && (
+                                <p className="text-muted-foreground text-xs">{t('orders.saved_address_hint', { address: savedAddressHint })}</p>
+                            )}
+                            {/* ⚠ Joy, 17 Oct 2026: each field as wide as what goes in it.
+                            Who and where on one wrapping row, the street and landmark
+                            on the next, the charge and the weight on the last. */}
+                            {!data.hand_over && (
+                                <>
+                                    <div className="flex flex-wrap items-start gap-3">
+                                        <div className="grid w-full gap-1 sm:w-56">
+                                            <Label htmlFor="addr-name">{t('orders.recipient_name')}</Label>
+                                            <Input id="addr-name" value={data.address.name} onChange={(e) => setAddress({ name: e.target.value })} />
+                                            <InputError message={addressErrors['address.name']} />
+                                        </div>
+                                        <div className="grid w-full gap-1 sm:w-40">
+                                            <Label htmlFor="addr-phone">{t('orders.recipient_phone')}</Label>
                                             <Input
-                                                aria-label="Amount"
-                                                inputMode="decimal"
-                                                placeholder="Amount"
-                                                className="text-right tabular-nums"
-                                                value={row.amount}
-                                                onChange={(e) => setPayment(index, { amount: e.target.value })}
+                                                id="addr-phone"
+                                                inputMode="tel"
+                                                value={data.address.phone}
+                                                onChange={(e) => setAddress({ phone: e.target.value })}
                                             />
-                                            <InputError message={lineErrors[`payments.${index}.amount`]} />
+                                            <InputError message={addressErrors['address.phone']} />
                                         </div>
-                                        <Input
-                                            aria-label="Reference"
-                                            placeholder="bKash TrxID"
-                                            className="w-full sm:w-44"
-                                            value={row.reference}
-                                            onChange={(e) => setPayment(index, { reference: e.target.value })}
+                                        <BdPlaceFields
+                                            idPrefix="order-place"
+                                            itemClassName="grid w-full gap-1 sm:w-48"
+                                            districts={districts}
+                                            value={{ district: data.address.district, thana: data.address.thana, area: data.address.area }}
+                                            onChange={(place) => setAddress(place)}
+                                            errors={{
+                                                district: addressErrors['address.district'],
+                                                thana: addressErrors['address.thana'],
+                                                area: addressErrors['address.area'],
+                                            }}
                                         />
+                                    </div>
+                                    <div className="flex flex-wrap items-start gap-3">
+                                        <div className="grid w-full min-w-0 gap-1 sm:w-auto sm:max-w-xl sm:flex-[1_1_20rem]">
+                                            <Label htmlFor="addr-line">{t('orders.address_line')}</Label>
+                                            <Input
+                                                id="addr-line"
+                                                value={data.address.address_line}
+                                                onChange={(e) => setAddress({ address_line: e.target.value })}
+                                            />
+                                            <InputError message={addressErrors['address.address_line']} />
+                                        </div>
+                                        <div className="grid w-full gap-1 sm:w-60">
+                                            <Label htmlFor="addr-landmark">{t('orders.landmark')}</Label>
+                                            <Input
+                                                id="addr-landmark"
+                                                value={data.address.landmark}
+                                                onChange={(e) => setAddress({ landmark: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
+                                {data.delivery_method !== 'hand' && (
+                                    <div className="grid gap-1">
+                                        <Label htmlFor="order-delivery-charge">
+                                            {data.delivery_method === 'courier'
+                                                ? t('och.courier_charge')
+                                                : data.delivery_method === ''
+                                                  ? t('orders.delivery_charge')
+                                                  : t('och.typed_charge')}
+                                        </Label>
+                                        <Input
+                                            id="order-delivery-charge"
+                                            type="number"
+                                            inputMode="decimal"
+                                            min={0}
+                                            step="0.01"
+                                            className="w-36 text-right"
+                                            value={data.delivery_charge}
+                                            onChange={(e) => setData('delivery_charge', e.target.value)}
+                                            placeholder="0"
+                                            readOnly={data.delivery_method === 'courier' && !options.may_change_courier_charge}
+                                        />
+                                        <p className="text-muted-foreground max-w-xs text-xs">
+                                            {data.delivery_method === 'courier'
+                                                ? check.courier_zone === null
+                                                    ? t('och.courier_pick_district')
+                                                    : options.may_change_courier_charge
+                                                      ? t('och.courier_zone_owner', { zone: check.courier_zone, charge: courierCharge ?? '' })
+                                                      : t('och.courier_zone', { zone: check.courier_zone })
+                                                : t('orders.delivery_charge_hint')}
+                                        </p>
+                                        <InputError message={errors.delivery_charge} />
+                                    </div>
+                                )}
+                                <div className="grid gap-1">
+                                    <Label htmlFor="order-weight">{t('orders.parcel_weight')}</Label>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <Input
+                                            id="order-weight"
+                                            type="number"
+                                            inputMode="numeric"
+                                            min={1}
+                                            step={1}
+                                            className="w-36 text-right"
+                                            value={data.weight_grams}
+                                            onChange={(e) => setData('weight_grams', e.target.value)}
+                                            placeholder={weight.missing === 0 && weightGrams > 0 ? String(weightGrams) : ''}
+                                        />
+                                        <span className="text-muted-foreground text-sm tabular-nums">
+                                            {weight.missing === 0
+                                                ? t('orders.weight_from_lines', { grams: weightGrams.toLocaleString('en-IN') })
+                                                : t('orders.weight_at_least', { grams: weightGrams.toLocaleString('en-IN') })}
+                                        </span>
+                                        {weight.missing > 0 && (
+                                            <Badge variant="outline" className="text-amber-700 dark:text-amber-400">
+                                                {t('orders.weight_missing_items', { count: weight.missing })}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <p className="text-muted-foreground text-xs">{t('orders.weight_hint')}</p>
+                                    <InputError message={errors.weight_grams} />
+                                </div>
+                            </div>
+                        </FormSection>
+
+                        {/* ⭐ B18 (25 Oct 2026): mostly cash on delivery, some paid by SSL, some paid before. */}
+                        <FormSection title={t('orders.section_notes')}>
+                            <div className="grid gap-3 lg:grid-cols-2">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="order-instructions">{t('orders.special_instructions')}</Label>
+                                    <Input
+                                        id="order-instructions"
+                                        maxLength={500}
+                                        placeholder={t('orders.special_instructions_placeholder')}
+                                        value={data.special_instructions}
+                                        onChange={(e) => setData('special_instructions', e.target.value)}
+                                    />
+                                    <InputError message={errors.special_instructions} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="order-note">{t('orders.note_optional')}</Label>
+                                    <Input id="order-note" value={data.note} onChange={(e) => setData('note', e.target.value)} />
+                                </div>
+                                <AgentPicker
+                                    id="order-agent"
+                                    value={data.agent}
+                                    options={commissionAgents}
+                                    error={errors.agent}
+                                    onChange={(value) => setData('agent', value)}
+                                />
+                            </div>
+                        </FormSection>
+                    </div>
+                    <aside className="flex flex-col gap-4 xl:sticky xl:top-4 xl:self-start">
+                        <FormSection title={t('och.payment')}>
+                            <div className="flex flex-wrap items-start gap-3">
+                                <div className="grid w-full gap-1 sm:w-56">
+                                    <Label htmlFor="order-payment">{t('och.payment')}</Label>
+                                    <SearchSelect
+                                        id="order-payment"
+                                        value={data.payment}
+                                        onChange={(e) => {
+                                            setData('payment', e.target.value);
+                                            // Answer 9: the SSL money waits in SSL Commerz Clearing until SSL pays out.
+                                            if (e.target.value === 'ssl_paid' && data.paid_money_account_id === '' && options.ssl_clearing_id) {
+                                                setData('paid_money_account_id', String(options.ssl_clearing_id));
+                                            }
+                                        }}
+                                    >
+                                        {options.payments.map((p) => (
+                                            <option key={p.value} value={p.value}>
+                                                {t(`och.pay.${p.value}` as 'och.pay.cod')}
+                                            </option>
+                                        ))}
+                                    </SearchSelect>
+                                    {data.payment === 'advance' && <p className="text-muted-foreground max-w-xs text-xs">{t('och.advance_hint')}</p>}
+                                </div>
+                                {data.payment === 'ssl_paid' && !editing && options.paid_accounts.length > 0 && (
+                                    <>
+                                        <div className="grid w-full gap-1 sm:w-56">
+                                            <Label htmlFor="order-paid-into">{t('och.paid_into')}</Label>
+                                            <SearchSelect
+                                                id="order-paid-into"
+                                                value={data.paid_money_account_id}
+                                                onChange={(e) => setData('paid_money_account_id', e.target.value)}
+                                            >
+                                                <option value="">{t('och.choose_channel')}</option>
+                                                {options.paid_accounts.map((a) => (
+                                                    <option key={a.id} value={String(a.id)}>
+                                                        {a.name}
+                                                    </option>
+                                                ))}
+                                            </SearchSelect>
+                                            <p className="text-muted-foreground max-w-xs text-xs">{t('och.paid_into_hint')}</p>
+                                            <InputError message={(errors as Record<string, string | undefined>).paid_money_account_id} />
+                                        </div>
+                                        <div className="grid w-full gap-1 sm:w-48">
+                                            <Label htmlFor="order-paid-ref">{t('och.paid_reference')}</Label>
+                                            <Input
+                                                id="order-paid-ref"
+                                                maxLength={255}
+                                                value={data.paid_reference}
+                                                onChange={(e) => setData('paid_reference', e.target.value)}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                            {!editing && payAccounts.length > 0 && (
+                                <div className="mt-3 grid gap-2">
+                                    <Label>Paid with the order</Label>
+                                    {data.payments.map((row, index) => (
+                                        <div key={index} className="flex flex-wrap items-start gap-2">
+                                            <div className="grid w-full gap-1 sm:w-56">
+                                                <SearchSelect
+                                                    aria-label="Paid into"
+                                                    value={row.money_account_id}
+                                                    onChange={(e) => setPayment(index, { money_account_id: e.target.value })}
+                                                >
+                                                    <option value="">Paid into</option>
+                                                    {payAccounts.map((a) => (
+                                                        <option key={a.id} value={String(a.id)}>
+                                                            {a.name}
+                                                        </option>
+                                                    ))}
+                                                </SearchSelect>
+                                                <InputError message={lineErrors[`payments.${index}.money_account_id`]} />
+                                            </div>
+                                            <div className="grid w-full gap-1 sm:w-32">
+                                                <Input
+                                                    aria-label="Amount"
+                                                    inputMode="decimal"
+                                                    placeholder="Amount"
+                                                    className="text-right tabular-nums"
+                                                    value={row.amount}
+                                                    onChange={(e) => setPayment(index, { amount: e.target.value })}
+                                                />
+                                                <InputError message={lineErrors[`payments.${index}.amount`]} />
+                                            </div>
+                                            <Input
+                                                aria-label="Reference"
+                                                placeholder="bKash TrxID"
+                                                className="w-full sm:w-44"
+                                                value={row.reference}
+                                                onChange={(e) => setPayment(index, { reference: e.target.value })}
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    setData(
+                                                        'payments',
+                                                        data.payments.filter((_, i) => i !== index),
+                                                    )
+                                                }
+                                            >
+                                                Remove
+                                            </Button>
+                                        </div>
+                                    ))}
+                                    <div className="flex flex-wrap items-center gap-3">
                                         <Button
                                             type="button"
-                                            variant="ghost"
+                                            variant="outline"
                                             size="sm"
+                                            className="w-fit"
                                             onClick={() =>
-                                                setData(
-                                                    'payments',
-                                                    data.payments.filter((_, i) => i !== index),
-                                                )
+                                                setData('payments', [
+                                                    ...data.payments,
+                                                    {
+                                                        money_account_id: '',
+                                                        amount: String(Math.max(0, total - paidNow)),
+                                                        reference: '',
+                                                    },
+                                                ])
                                             }
                                         >
-                                            Remove
+                                            + Add payment
                                         </Button>
+                                        {paidNow > 0 && (
+                                            <span className="text-sm tabular-nums">
+                                                Paid {money(paidNow)} · Rest {money(Math.max(0, total - paidNow))}
+                                                {data.delivery_method === 'courier' && total - paidNow > 0 ? ' (courier collects)' : ''}
+                                            </span>
+                                        )}
                                     </div>
-                                ))}
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        className="w-fit"
-                                        onClick={() =>
-                                            setData('payments', [
-                                                ...data.payments,
-                                                {
-                                                    money_account_id: '',
-                                                    amount: String(Math.max(0, total - paidNow)),
-                                                    reference: '',
-                                                },
-                                            ])
-                                        }
-                                    >
-                                        + Add payment
-                                    </Button>
-                                    {paidNow > 0 && (
-                                        <span className="text-sm tabular-nums">
-                                            Paid {money(paidNow)} · Rest {money(Math.max(0, total - paidNow))}
-                                            {data.delivery_method === 'courier' && total - paidNow > 0 ? ' (courier collects)' : ''}
-                                        </span>
-                                    )}
+                                    <InputError message={lineErrors.payments} />
                                 </div>
-                                <InputError message={lineErrors.payments} />
+                            )}
+                        </FormSection>
+                        <div className="hidden rounded-xl border p-4 xl:grid xl:gap-3">
+                            <div className="flex items-baseline justify-between">
+                                <span className="text-muted-foreground text-sm">{t('orders.order_total')}</span>
+                                <span className="text-2xl font-semibold tabular-nums">{money(total)}</span>
                             </div>
-                        )}
-                    </FormSection>
-
-                    <FormSection title={t('orders.section_notes')}>
-                        <div className="grid gap-3 lg:grid-cols-2">
-                            <div className="grid gap-2">
-                                <Label htmlFor="order-instructions">{t('orders.special_instructions')}</Label>
-                                <Input
-                                    id="order-instructions"
-                                    maxLength={500}
-                                    placeholder={t('orders.special_instructions_placeholder')}
-                                    value={data.special_instructions}
-                                    onChange={(e) => setData('special_instructions', e.target.value)}
-                                />
-                                <InputError message={errors.special_instructions} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="order-note">{t('orders.note_optional')}</Label>
-                                <Input id="order-note" value={data.note} onChange={(e) => setData('note', e.target.value)} />
-                            </div>
-                            <AgentPicker
-                                id="order-agent"
-                                value={data.agent}
-                                options={commissionAgents}
-                                error={errors.agent}
-                                onChange={(value) => setData('agent', value)}
-                            />
+                            {paidNow > 0 && (
+                                <div className="text-muted-foreground flex justify-between text-sm tabular-nums">
+                                    <span>Paid {money(paidNow)}</span>
+                                    <span>Rest {money(Math.max(0, total - paidNow))}</span>
+                                </div>
+                            )}
+                            {actions}
                         </div>
-                    </FormSection>
+                    </aside>
                 </div>
 
                 {/* ⭐ 25 Oct 2026 (Q16 = A): asked only once the server says a line is below its minimum. */}
@@ -1817,7 +1872,7 @@ function CreateOrderForm({
                 )}
 
                 {/* The total and the button stay in sight while the form is scrolled. */}
-                <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card/95 sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t px-4 py-3 backdrop-blur">
+                <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card/95 sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t px-4 py-3 backdrop-blur xl:hidden">
                     <p className="text-sm">
                         <span className="text-muted-foreground">{t('orders.order_total')}</span>{' '}
                         <span className="font-semibold tabular-nums">{money(total)}</span>
@@ -1826,44 +1881,7 @@ function CreateOrderForm({
                             · {t('orders.summary_dated')} {showDate(data.ordered_at || today)}
                         </span>
                     </p>
-                    {!editing && data.delivery_method === 'hand' ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button type="submit" name="then" value="save" variant="outline" disabled={processing || unpriced}>
-                                Save only
-                            </Button>
-                            <Button type="submit" name="then" value="handover" disabled={processing || unpriced} className="w-fit">
-                                Save and hand over
-                            </Button>
-                            <InputError message={lineErrors.then} />
-                        </div>
-                    ) : canBook ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <SearchSelect
-                                aria-label="Courier"
-                                className="w-56"
-                                value={data.courier_account_id}
-                                onChange={(e) => setData('courier_account_id', e.target.value)}
-                            >
-                                <option value="">Courier: default for the order</option>
-                                {courierAccounts.map((a) => (
-                                    <option key={a.id} value={String(a.id)}>
-                                        {a.label}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <Button type="submit" name="then" value="save" variant="outline" disabled={processing || unpriced}>
-                                Save only
-                            </Button>
-                            <Button type="submit" name="then" value="book" disabled={processing || unpriced} className="w-fit">
-                                Save and book
-                            </Button>
-                            <InputError message={lineErrors.then ?? lineErrors.courier_account_id} />
-                        </div>
-                    ) : (
-                        <Button disabled={processing || unpriced} className="w-fit">
-                            {editing ? t('corr.sales.order.save') : t('orders.record')}
-                        </Button>
-                    )}
+                    {actions}
                 </div>
             </form>
         </>
