@@ -96,9 +96,14 @@ it('offers the chosen brand and unbranded products, keeps a line chosen before, 
         ['op' => 'mismatch', 'product' => $products[0], 'brandId' => ''],
     ]))->toBe([[2, 3], [1, 2, 3], [1, 2, 3], 10, null, null, null]);
 
+    // ⭐ Order desk (Joy, 31 Oct 2026): one order holds several brands, so the
+    // order form offers every product and shows each line's brand instead of
+    // filtering by an order brand and warning. The helpers above stay for the
+    // screens that still sell under one brand.
     $page = practiceEighteenSource('pages/sales/orders/index.tsx');
-    expect($page)->toContain('productsForBrand(products, brandId, line.product_id)')
-        ->and($page)->toContain("t('orders.other_brand'");
+    expect($page)->not->toContain('productsForBrand(')
+        ->and($page)->not->toContain("t('orders.other_brand'")
+        ->and($page)->toContain('<BrandBadge name={lineBrand} />');
 });
 
 it('shows plain numbers in the invoice boxes and grouped money in its summary', function () {
