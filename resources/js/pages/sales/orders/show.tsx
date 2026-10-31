@@ -540,8 +540,11 @@ function ChallanCard({
     canRecordOutcome,
     customerId,
     reversalReasons = [],
+    courierOrder = false,
 }: {
     reversalReasons?: ReasonOption[];
+    /** ⭐ Order desk (31 Oct 2026): a courier order is billed by the courier's answer. */
+    courierOrder?: boolean;
     challan: Challan;
     couriers: { id: number; name: string }[];
     courierAccounts: CourierAccountOption[];
@@ -573,7 +576,7 @@ function ChallanCard({
                 </a>
                 {/* A parcel's challan is billed by the courier's answer, never by hand. */}
                 {challan.reversed && <Badge variant="secondary">{t('corr.sales.reversed')}</Badge>}
-                {canDeliver && !consignment && !challan.reversed && (
+                {canDeliver && !consignment && !challan.reversed && !courierOrder && (
                     <Link href={route('sales.invoices.create', { customer_id: customerId, delivery_id: challan.id })} className="underline">
                         Invoice this challan
                     </Link>
@@ -1660,9 +1663,17 @@ export default function SalesOrderShow({
                             />
                         )}
                         {stock_shortfall === null && credit_refusal === null && (
-                            <Button size="sm" onClick={approve}>
-                                Approve
-                            </Button>
+                            <>
+                                {/* ⭐ Order desk (Joy's decision 3): approve and send to the courier in one press. */}
+                                {can_book_courier && courier_accounts.length > 0 && (
+                                    <Button size="sm" onClick={() => router.post(route('sales.orders.approve', order.id), { book: true })}>
+                                        Approve and book
+                                    </Button>
+                                )}
+                                <Button size="sm" variant={can_book_courier && courier_accounts.length > 0 ? 'outline' : 'default'} onClick={approve}>
+                                    Approve
+                                </Button>
+                            </>
                         )}
                         {stock_shortfall === null && credit_refusal !== null && can_override_credit && (
                             <ConfirmDialog
@@ -1788,6 +1799,7 @@ export default function SalesOrderShow({
                                 canRecordOutcome={can_record_outcome}
                                 customerId={order.customer.id}
                                 reversalReasons={reversal_reasons}
+                                courierOrder={channel_info?.delivery_method === 'courier'}
                             />
                         ))}
                     </div>
