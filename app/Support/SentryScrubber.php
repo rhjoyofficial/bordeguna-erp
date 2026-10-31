@@ -37,6 +37,18 @@ final class SentryScrubber
             $event->setContext((string) $name, (array) $context);
         }
 
+        // ⚠ A database error message carries the bound VALUES (a duplicate
+        // e-mail, an amount in an insert), so for those only the SQLSTATE code
+        // is kept. Every other exception message keeps its words but loses any
+        // e-mail address or long digit run (phone, account, NID).
+        $exceptions = $event->getExceptions();
+        foreach ($exceptions as $exception) {
+            $exception->setValue(self::scrubMessage((string) $exception->getType(), (string) $exception->getValue()));
+        }
+        $event->setExceptions($exceptions);
+
+        $event->setBreadcrumb([]);
+
         return $event;
     }
 
@@ -56,6 +68,17 @@ final class SentryScrubber
         }
 
         return $data;
+    }
+
+    public static function scrubMessage(string $type, string $message): string
+    {
+        if (str_contains($type, 'QueryException') || str_contains($type, 'PDOException') || str_contains($message, 'SQLSTATE[')) {
+            return preg_match('/SQLSTATE\[(\w+)\]/', $message, $m) ? 'Database error (SQLSTATE '.$m[1].')' : 'Database error';
+        }
+
+        $message = preg_replace('/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/', '[email]', $message) ?? $message;
+
+        return preg_replace('/\d[\d\s-]{7,}\d/', '[number]', $message) ?? $message;
     }
 
     private static function isSensitive(string $key): bool

@@ -1,6 +1,8 @@
 <?php
 
 use App\Support\SentryScrubber;
+use Illuminate\Database\QueryException;
+use Sentry\Breadcrumb;
 use Sentry\Event;
 
 /**
@@ -49,4 +51,27 @@ it('keeps personal data and tracing switched off in config', function () {
 
 it('sends nothing when no DSN is configured', function () {
     expect(config('sentry.dsn'))->toBeEmpty();
+});
+
+it('keeps only the SQLSTATE code of a database error, never the bound values', function () {
+    $msg = "SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry 'joy@example.com' for key 'users_email' (Connection: mysql, SQL: insert into users (email, salary) values (joy@example.com, 30000))";
+
+    $clean = SentryScrubber::scrubMessage(QueryException::class, $msg);
+
+    expect($clean)->toBe('Database error (SQLSTATE 23000)')
+        ->and($clean)->not->toContain('joy@example.com')
+        ->and($clean)->not->toContain('30000');
+});
+
+it('masks e-mail addresses and long digit runs in any other error message', function () {
+    $clean = SentryScrubber::scrubMessage(RuntimeException::class, 'Cannot pay joy@example.com on account 1071837460002 or call 01334943783 for step 4');
+
+    expect($clean)->toBe('Cannot pay [email] on account [number] or call [number] for step 4');
+});
+
+it('does not send breadcrumbs, which can carry log text', function () {
+    $event = Event::createEvent();
+    $event->setBreadcrumb([new Breadcrumb(Breadcrumb::LEVEL_INFO, Breadcrumb::TYPE_DEFAULT, 'log', 'Paid BDT 242,850 to Musa')]);
+
+    expect(SentryScrubber::beforeSend($event)->getBreadcrumbs())->toBe([]);
 });

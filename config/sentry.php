@@ -44,7 +44,7 @@ return [
     ],
 
     'breadcrumbs' => [
-        'logs' => true,
+        'logs' => false,
         'cache' => false,
         'livewire' => false,
         'sql_queries' => false,
