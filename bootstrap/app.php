@@ -28,6 +28,7 @@ use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Routing\Middleware\ThrottleRequestsWithRedis;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Sentry\Laravel\Integration;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -176,6 +177,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        // Error reporting to Sentry (31 Oct 2026). Inert unless SENTRY_LARAVEL_DSN is
+        // set in the server's .env; what is sent is limited in config/sentry.php.
+        Integration::handles($exceptions);
+
         // Two approvers, one request. The loser of the race gets a sentence
         // telling them what happened and where it stands, not a blank 500.
         //
