@@ -137,6 +137,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
 
     Route::middleware('can:sales.orders.approve')->group(function () {
         Route::post('orders/{order}/approve', [SalesOrderController::class, 'approve'])->name('orders.approve');
+        // ⭐ Order desk (Joy's decision 3, 31 Oct 2026): many waiting orders at once.
+        Route::post('orders/approve-and-book', [SalesOrderController::class, 'approveAndBookMany'])->name('orders.approve-and-book');
         Route::post('orders/{order}/reject', [SalesOrderController::class, 'reject'])->name('orders.reject');
     });
 

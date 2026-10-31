@@ -25,6 +25,7 @@ use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\ProductPrice;
+use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;
@@ -178,4 +179,37 @@ it('approves a waiting order and sends it to the courier in one press (Joy decis
 
     expect(CourierBulkRunItem::query()->sole()->sales_order_id)->toBe($order->id);
     Queue::assertPushed(BookParcelsInBulk::class);
+});
+
+it('hands a pickup order over in one press: challan, invoice, the advance taken, the rest owed', function () {
+    ($this->post)([
+        'delivery_method' => 'hand', 'address' => null, 'then' => 'handover',
+        'payments' => [['money_account_id' => $this->cash->id, 'amount' => '500']],
+    ])->assertSessionHasNoErrors()
+        ->assertSessionHas('success', fn (string $message) => str_contains($message, 'handed over and billed') && str_contains($message, 'Still owed: Tk 460.00'));
+
+    $order = ($this->latest)();
+    $invoice = SalesInvoice::query()->sole();
+
+    expect((float) $order->lines()->first()->quantity_delivered)->toBe(3.0)
+        ->and((string) $invoice->total)->toBe('960.0000')
+        ->and($invoice->outstanding()->toTaka())->toBe('460.00');
+});
+
+it('approves several waiting orders and sends each to the courier in one press', function () {
+    Queue::fake();
+    ($this->post)([], $this->staff)->assertSessionHasNoErrors();
+    ($this->post)([], $this->staff)->assertSessionHasNoErrors();
+    $ids = SalesOrder::query()->pluck('id')->all();
+
+    $this->actingAs($this->owner)->post('/sales/orders/approve-and-book', ['ids' => $ids])
+        ->assertSessionHas('success', fn (string $message) => str_starts_with($message, '2 order(s) approved and sent to the courier.'));
+
+    expect(CourierBulkRunItem::query()->pluck('sales_order_id')->sort()->values()->all())->toBe(collect($ids)->sort()->values()->all());
+});
+
+it('keeps Approve and book for many to approvers', function () {
+    ($this->post)([], $this->staff)->assertSessionHasNoErrors();
+
+    $this->actingAs($this->staff)->post('/sales/orders/approve-and-book', ['ids' => [($this->latest)()->id]])->assertForbidden();
 });

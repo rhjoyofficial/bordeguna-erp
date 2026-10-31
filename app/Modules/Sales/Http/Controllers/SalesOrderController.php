@@ -79,6 +79,7 @@ use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OrderChannelDetails;
 use App\Modules\Sales\Support\OrderDeskBooking;
+use App\Modules\Sales\Support\OrderDeskHandOver;
 use App\Modules\Sales\Support\OrderDeskPayments;
 use App\Modules\Sales\Support\OrderNextSteps;
 use App\Modules\Sales\Support\OrderReservations;
@@ -221,6 +222,8 @@ class SalesOrderController extends Controller
             // the brand this person last took an order for, pre-chosen.
             'brands' => OrderBrand::options($businessId),
             'last_brand_id' => $this->lastBrandId($request, $businessId),
+            // ⭐ Order desk: the waiting list offers "Approve and book" for many at once.
+            'can_approve_and_book' => $request->user()->can('sales.orders.approve') && $request->user()->can('sales.sell') && $request->user()->can('couriers.parcels.book'),
             // ⭐ F24 (practice run, 17 Oct 2026): and the warehouse this person
             // last took an order for, if it is still in use. Else the default.
             'last_warehouse_id' => $this->lastWarehouseId($request, $businessId),
@@ -1037,7 +1040,7 @@ class SalesOrderController extends Controller
             'payments.*.money_account_id' => ['required', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'payments.*.amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
             'payments.*.reference' => ['nullable', 'string', 'max:120'],
-            'then' => ['nullable', Rule::in(['save', 'book'])],
+            'then' => ['nullable', Rule::in(['save', 'book', 'handover'])],
             'courier_account_id' => ['nullable', 'integer'],
         ], [
             'ordered_at.before_or_equal' => 'An order cannot be dated in the future.',
@@ -1079,6 +1082,11 @@ class SalesOrderController extends Controller
         $paidAccount = self::paidOnlineAccount($data, $request->user());
         $payments = OrderDeskPayments::check($data['payments'] ?? [], $request->user());
         $bookWith = ($data['then'] ?? 'save') === 'book' ? OrderDeskBooking::account($data['courier_account_id'] ?? null, $request->user()) : null;
+        $handOverNow = ($data['then'] ?? 'save') === 'handover';
+
+        if ($handOverNow) {
+            OrderDeskHandOver::assertMay($request->user());
+        }
 
         // ⚠⚠ A typed price is a margin decision (21 Sep 2026): whoever may take an
         // order had it for any figure, with nothing to say who chose it. Only a
@@ -1297,6 +1305,12 @@ class SalesOrderController extends Controller
         if ($bookWith !== null) {
             return redirect()->route('sales.orders.show', $order)
                 ->with('success', OrderDeskBooking::start($order, $bookWith, $user));
+        }
+
+        // ⭐ Order desk: "Save and hand over" (pickup): challan and invoice too.
+        if ($handOverNow) {
+            return redirect()->route('sales.orders.show', $order)
+                ->with('success', OrderDeskHandOver::start($order, $user));
         }
 
         return redirect()->route('sales.orders.show', $order)
@@ -1639,6 +1653,50 @@ class SalesOrderController extends Controller
      * ⚠ A database error is a RuntimeException too (PDOException), and its SQL
      * must never be read out in a toast, so it is let through to the error page.
      */
+    /**
+     * ⭐ Order desk (Joy's decision 3, 31 Oct 2026): approve the ticked waiting
+     * orders and send each to its default courier, one by one through the
+     * same approval and the same booking run as one order. An order the
+     * approval refuses (credit, stock) is named and left waiting.
+     */
+    public function approveAndBookMany(Request $request, ApproveSalesOrder $action): RedirectResponse
+    {
+        $this->authorize('sales.orders.approve');
+
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:100'],
+            'ids.*' => ['integer', 'distinct'],
+        ]);
+
+        $choice = OrderDeskBooking::account(null, $request->user());
+        $sent = 0;
+        $notes = [];
+
+        foreach (SalesOrder::query()->with('approvalRequest')->whereIn('id', $data['ids'])->orderBy('id')->get() as $order) {
+            try {
+                if ($order->approvalRequest?->isPending()) {
+                    $action->handle($order, $request->user());
+                }
+            } catch (QueryException $e) {
+                throw $e;
+            } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+                $notes[] = "{$order->order_number}: {$e->getMessage()}";
+
+                continue;
+            }
+
+            $message = OrderDeskBooking::start($order, $choice, $request->user());
+
+            if (str_contains($message, ' and sent to ')) {
+                $sent++;
+            } else {
+                $notes[] = $message;
+            }
+        }
+
+        return back()->with('success', trim("{$sent} order(s) approved and sent to the courier. ".implode(' ', $notes)));
+    }
+
     public function approve(Request $request, SalesOrder $order, ApproveSalesOrder $action): RedirectResponse
     {
         $this->authorize('sales.orders.approve');
