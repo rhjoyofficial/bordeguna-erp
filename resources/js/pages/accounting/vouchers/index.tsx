@@ -1,10 +1,11 @@
 import { Chip } from '@/components/assets/assets-ui';
+import { Pagination } from '@/components/data-table/pagination';
 import { Amount, DateCell, DocNo, LedgerHead, PartyText, StatusPill } from '@/components/ledger-text';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
-import { type BreadcrumbItem, type SharedData } from '@/types';
+import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { type FormEventHandler, useState } from 'react';
 import { type VoucherTypeProps } from './form';
@@ -22,12 +23,6 @@ interface Row {
     narration: string | null;
     total: string;
     created_by: string | null;
-}
-
-interface Paginated<T> {
-    data: T[];
-    links: { url: string | null; label: string; active: boolean }[];
-    total: number;
 }
 
 const STATUS_LABEL: Record<Row['status'], string> = {
@@ -219,27 +214,7 @@ export default function VouchersIndex({
                     </table>
                 </div>
 
-                {vouchers.links.length > 3 && (
-                    <div className="flex flex-wrap gap-1">
-                        {vouchers.links.map((link, index) =>
-                            link.url === null ? (
-                                <span
-                                    key={index}
-                                    className="text-muted-foreground px-3 py-1 text-sm"
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
-                            ) : (
-                                <Link
-                                    key={index}
-                                    href={link.url}
-                                    preserveScroll
-                                    className={`rounded px-3 py-1 text-sm ${link.active ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
-                            ),
-                        )}
-                    </div>
-                )}
+                <Pagination meta={vouchers} />
             </div>
         </AppLayout>
     );

@@ -280,10 +280,7 @@ export default function StockTransfersIndex({
                     </table>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-muted-foreground text-xs">Stock on the road belongs to neither warehouse until somebody marks it received.</p>
-                    <Pagination meta={transfers} />
-                </div>
+                <Pagination meta={transfers} />
             </div>
         </AppLayout>
     );

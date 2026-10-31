@@ -54,6 +54,7 @@ use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OwnerPriceVisibility;
 use App\Modules\Sales\Support\PriceFloor;
 use App\Support\Documents\RelatedDocuments;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -93,7 +94,7 @@ class SalesInvoiceController extends Controller
             ->when($filters['status'] === 'settled', fn ($query) => $query->settled())
             ->orderByDesc('invoice_date')
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $brandOf = OrderBrand::forInvoices(collect($invoices->items())->pluck('id'));

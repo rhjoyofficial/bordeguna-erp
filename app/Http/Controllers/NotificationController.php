@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -29,8 +30,6 @@ use Inertia\Response;
  */
 class NotificationController extends Controller
 {
-    private const PER_PAGE = 25;
-
     public function index(Request $request): Response
     {
         $user = $request->user();
@@ -62,7 +61,7 @@ class NotificationController extends Controller
 
         $notifications = $query
             ->latest()
-            ->paginate(self::PER_PAGE)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (DatabaseNotification $n) => [
                 'id' => $n->id,

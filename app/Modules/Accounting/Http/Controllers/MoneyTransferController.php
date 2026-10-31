@@ -15,6 +15,7 @@ use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Support\CorrectionScreen;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -43,7 +44,7 @@ class MoneyTransferController extends Controller
             ->when(! $showCorrections, fn ($query) => $query->live())
             ->orderByDesc('transferred_on')
             ->orderByDesc('id')
-            ->paginate(25)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (MoneyTransfer $t) => [
                 'id' => $t->id,

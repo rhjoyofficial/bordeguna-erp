@@ -16,6 +16,7 @@ use App\Modules\Inventory\Corrections\InventoryAdjustmentActionPolicy;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Support\AdjustmentCause;
 use App\Modules\Inventory\Support\StockValue;
+use App\Support\PerPage;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -64,7 +65,7 @@ class StockAdjustmentController extends Controller
             ->when($filters['status'] === 'reversed', fn ($q) => $q->whereNotNull('reversed_at'))
             ->when($filters['focus'], fn ($q, $id) => $q->whereKey($id))
             ->latest('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $adjustments->getCollection()->transform(fn (InventoryAdjustment $a) => [

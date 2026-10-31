@@ -1,10 +1,11 @@
+import { Pagination } from '@/components/data-table/pagination';
 import { PendingApprovalsNotice } from '@/components/purchasing/purchase-approval-decision';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
 interface Row {
@@ -19,11 +20,6 @@ interface Row {
     amount: string;
     open: string;
     is_reversed: boolean;
-}
-
-interface Paginated<T> {
-    data: T[];
-    links: { url: string | null; label: string; active: boolean }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -135,21 +131,7 @@ export default function AdvanceIndex({
                     </table>
                 </div>
 
-                {advances.links.length > 3 && (
-                    <div className="flex flex-wrap gap-1">
-                        {advances.links.map((link, index) =>
-                            link.url ? (
-                                <Link
-                                    key={index}
-                                    href={link.url}
-                                    preserveState
-                                    className={`rounded border px-2 py-1 text-sm ${link.active ? 'bg-primary text-primary-foreground' : ''}`}
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
-                            ) : null,
-                        )}
-                    </div>
-                )}
+                <Pagination meta={advances} />
             </div>
         </AppLayout>
     );

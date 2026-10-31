@@ -34,6 +34,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Purchasing\Support\CorrectionReasons;
 use App\Modules\Sales\Models\Customer;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -607,7 +608,7 @@ class CrmActivityController extends Controller
                 fn ($q) => $q->open())
             ->with(['assignedTo:id,name', 'subject'])
             ->orderBy('due_at')
-            ->paginate(50)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $tasks->getCollection()->transform(fn (CrmTask $t) => [

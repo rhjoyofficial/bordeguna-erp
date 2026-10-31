@@ -57,6 +57,7 @@ use App\Modules\Purchasing\Support\SupplierChallans;
 use App\Modules\Purchasing\Support\TakeOffWhatTheyOwe;
 use App\Modules\Sales\Support\ProductPricing;
 use App\Support\Documents\RelatedDocuments;
+use App\Support\PerPage;
 use App\Support\RecordTimeline;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -120,7 +121,7 @@ class PurchaseOrderController extends Controller
                 ->where('status', '!=', PurchaseOrderStatus::Cancelled->value)
                 ->whereHas('lines', fn ($line) => $line->stillBillable()))
             ->latest()
-            ->paginate(15)
+            ->paginate(PerPage::from())
             ->withQueryString()
             // ⚠⚠ "Billing" is DERIVED from the order's supplier bills, replacing
             // the hand-set payment status this column used to show (audit #11).

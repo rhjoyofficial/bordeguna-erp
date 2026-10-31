@@ -13,6 +13,7 @@ use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Purchasing\Support\ReceiptRegister;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -50,7 +51,7 @@ class PurchaseReturnController extends Controller
             ->when($this->date($filters['to']), fn (Builder $query, string $to) => $query->whereDate('returned_at', '<=', $to))
             ->orderByDesc('returned_at')
             ->orderByDesc('id')
-            ->paginate(25)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $returns->setCollection($returns->getCollection()->map(fn (PurchaseReturn $return) => [

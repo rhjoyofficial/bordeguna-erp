@@ -22,6 +22,7 @@ use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\CustomerAdvanceBook;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -61,7 +62,7 @@ class CustomerAdvanceController extends Controller
             ->when($customer, fn ($q) => $q->where('customer_id', $customer->id))
             ->with(['customer:id,name', 'moneyAccount:id,name', 'salesOrder:id,order_number'])
             ->orderByDesc('received_on')->orderByDesc('id')
-            ->paginate(25)->withQueryString()
+            ->paginate(PerPage::from())->withQueryString()
             ->through(fn (CustomerAdvance $advance) => [
                 'id' => $advance->id,
                 'number' => $advance->number,

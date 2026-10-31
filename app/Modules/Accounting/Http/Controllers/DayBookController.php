@@ -14,6 +14,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\VoucherNarrations;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -41,15 +42,13 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class DayBookController extends Controller
 {
-    private const PER_PAGE = 100;
-
     public function index(Request $request): Response
     {
         $filters = $this->filters($request);
 
         $page = $this->query($filters)
             ->with(['lines.account:id,code,name', 'lines.party', 'source', 'postedBy:id,name'])
-            ->paginate(self::PER_PAGE)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         // One batch for the page's vouchers, so a narration costs no query per journal.

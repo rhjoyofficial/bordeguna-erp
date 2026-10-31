@@ -14,6 +14,7 @@ use App\Modules\Foundation\Corrections\Owners;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\SaveAnyway;
 use App\Modules\Purchasing\Support\CorrectionReasons;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -73,7 +74,7 @@ class ContactController extends Controller
             ->when($filters['status'] === 'active', fn (Builder $q) => $q->where('is_active', true))
             ->when($filters['status'] === 'inactive', fn (Builder $q) => $q->where('is_active', false))
             ->orderBy('name')
-            ->paginate(50)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (Contact $contact) => [
                 'id' => $contact->id,

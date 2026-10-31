@@ -35,6 +35,7 @@ use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesReturn;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -63,8 +64,6 @@ use Illuminate\Support\Str;
  */
 final class PartyDocuments
 {
-    public const PER_PAGE = 25;
-
     /**
      * @return Collection<int, array<string, mixed>>
      */
@@ -302,9 +301,9 @@ final class PartyDocuments
         $page = max(1, $page);
 
         $paginator = new LengthAwarePaginator(
-            $filtered->forPage($page, self::PER_PAGE)->values(),
+            $filtered->forPage($page, $perPage = PerPage::from())->values(),
             $filtered->count(),
-            self::PER_PAGE,
+            $perPage,
             $page,
             ['path' => $path, 'pageName' => 'docs_page'],
         );

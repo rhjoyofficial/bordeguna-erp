@@ -16,6 +16,7 @@ use App\Modules\Accounting\Support\ReportDates;
 use App\Modules\Accounting\Support\SupplierLedger;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Support\PerPage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -35,8 +36,6 @@ use Inertia\Response;
  */
 class GeneralLedgerController extends Controller
 {
-    private const PER_PAGE = 100;
-
     public function index(Request $request): Response
     {
         $business = Business::withoutGlobalScopes()->find(app(BusinessContext::class)->id());
@@ -180,7 +179,7 @@ class GeneralLedgerController extends Controller
             to: $to,
             partyType: $resolved[0] ?? null,
             partyId: $resolved[1] ?? null,
-            perPage: self::PER_PAGE,
+            perPage: PerPage::from(),
             page: max(1, $request->integer('page', 1)),
             hideReversedPairs: $hideReversed,
         );

@@ -1,3 +1,4 @@
+import { Pagination } from '@/components/data-table/pagination';
 import { Amount, DateCell, DocNo, LedgerHead, PartyText, StatusPill } from '@/components/ledger-text';
 import { DateRangeBar, ReportHeading } from '@/components/report/report-shell';
 import { SearchableSelect } from '@/components/searchable-select';
@@ -6,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
-import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/react';
+import { type BreadcrumbItem, type Paginated } from '@/types';
+import { Head, router } from '@inertiajs/react';
 import { Fragment, useState, type FormEventHandler } from 'react';
 
 interface Line {
@@ -34,11 +35,6 @@ interface Row {
     closed_month_exception?: boolean;
     total: string;
     lines: Line[];
-}
-
-interface Paginated<T> {
-    data: T[];
-    links: { url: string | null; label: string; active: boolean }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -264,27 +260,7 @@ export default function DayBook({
                     </table>
                 </div>
 
-                {journals.links.length > 3 && (
-                    <div className="flex flex-wrap gap-1 print:hidden">
-                        {journals.links.map((link, index) =>
-                            link.url === null ? (
-                                <span
-                                    key={index}
-                                    className="text-muted-foreground px-3 py-1 text-sm"
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
-                            ) : (
-                                <Link
-                                    key={index}
-                                    href={link.url}
-                                    preserveScroll
-                                    className={`rounded px-3 py-1 text-sm ${link.active ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
-                            ),
-                        )}
-                    </div>
-                )}
+                <Pagination meta={journals} />
             </div>
         </AppLayout>
     );

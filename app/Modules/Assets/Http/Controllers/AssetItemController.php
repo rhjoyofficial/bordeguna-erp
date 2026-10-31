@@ -28,6 +28,7 @@ use App\Modules\Foundation\Models\Reason;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -86,7 +87,7 @@ class AssetItemController extends Controller
             ->when($filters['idle'] ?? null, fn (Builder $query) => $query->whereNull('custodian_employee_id')->whereNull('custodian_party_id')->whereNull('transit_movement_id'))
             ->when($filters['overdue'] ?? null, fn (Builder $query) => $query->overdueFromOutside())
             ->orderBy('tag')
-            ->paginate(30)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         // One query for the page's overdue chips, not one per row.

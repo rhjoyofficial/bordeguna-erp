@@ -8,6 +8,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Models\Customer;
 use App\Support\DocumentNumber;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -39,7 +40,7 @@ class TicketController extends Controller
             // Open-and-overdue first, then open, then history.
             ->orderByRaw("CASE WHEN status IN ('open','in_progress') THEN 0 ELSE 1 END")
             ->orderBy('resolve_by')
-            ->paginate(25);
+            ->paginate(PerPage::from());
 
         $customerNames = Customer::query()
             ->whereIn('id', collect($tickets->items())->pluck('customer_id')->filter())

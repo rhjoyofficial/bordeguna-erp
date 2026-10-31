@@ -14,6 +14,7 @@ use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\ProductPriceHistory;
 use App\Modules\Sales\Support\ProductPricing;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -54,7 +55,7 @@ class ProductPriceController extends Controller
             ))
             ->orderByDesc('effective_from')
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString()
             // ⚠ Dhaka dates. The date casts serialise as UTC timestamps and the
             // list sliced them, so a price starting on the 1st read as starting

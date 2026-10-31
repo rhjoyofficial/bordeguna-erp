@@ -27,6 +27,7 @@ use App\Modules\Purchasing\Support\PaymentSplit;
 use App\Modules\Purchasing\Support\PurchasesPulse;
 use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Support\Documents\RelatedDocuments;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -83,7 +84,7 @@ class SupplierPaymentController extends Controller
             ->when($filters['state'] === 'posted', fn ($query) => $query->whereNull('reversed_at'))
             ->orderByDesc('paid_on')
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         // ⚠ Same date and money corrections as the detail page. A list that

@@ -27,6 +27,7 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Sales\Models\Customer;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -69,7 +70,7 @@ class JournalController extends Controller
             ->when($type !== null, fn ($query) => $query->where('journal_type', $type->value))
             ->orderByDesc('journal_date')
             ->orderByDesc('id')
-            ->paginate(25)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         return Inertia::render('accounting/journals/index', [

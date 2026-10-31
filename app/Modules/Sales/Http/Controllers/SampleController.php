@@ -27,6 +27,7 @@ use App\Modules\Sales\Models\SampleMake;
 use App\Modules\Sales\Support\CourierZoneCharge;
 use App\Modules\Sales\Support\SampleBook;
 use App\Support\BdGeo;
+use App\Support\PerPage;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -86,7 +87,7 @@ class SampleController extends Controller
             ->when($filters['product_id'] !== '', fn ($q) => $q->whereHas('lines', fn ($l) => $l->where('product_id', (int) $filters['product_id'])));
 
         $samples = SampleBook::with((clone $query)->orderByDesc('given_on')->orderByDesc('id'))
-            ->paginate(25)->withQueryString()
+            ->paginate(PerPage::from())->withQueryString()
             ->through(fn (SampleIssue $issue) => SampleBook::row($issue, $user) + [
                 'actions' => $policy->actionsFor($issue, $user)->toArray()['actions'],
             ]);

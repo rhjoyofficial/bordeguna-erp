@@ -69,7 +69,7 @@ it('shows the notifications the bell cannot fit', function () {
             ->where('counts.all', 30)
             // 25 to a page, so the thirtieth is two clicks away rather than
             // unreachable.
-            ->has('notifications.data', 25));
+            ->has('notifications.data', 20));
 });
 
 it('keeps read notifications and can show them again', function () {

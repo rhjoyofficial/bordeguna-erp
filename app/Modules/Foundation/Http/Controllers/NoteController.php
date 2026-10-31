@@ -5,6 +5,7 @@ namespace App\Modules\Foundation\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Models\Note;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,7 +44,7 @@ class NoteController extends Controller
             // the note somebody pinned precisely so it would not be buried.
             ->orderByDesc('is_pinned')
             ->orderByDesc('updated_at')
-            ->paginate(30)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (Note $note) => [
                 'id' => $note->id,

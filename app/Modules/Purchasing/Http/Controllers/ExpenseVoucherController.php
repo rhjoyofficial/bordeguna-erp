@@ -25,6 +25,7 @@ use App\Modules\Purchasing\Models\ExpenseVoucher;
 use App\Modules\Purchasing\Models\RecurringExpenseOccurrence;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Support\ExpenseVoucherCsv;
+use App\Support\PerPage;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -76,7 +77,7 @@ class ExpenseVoucherController extends Controller
             ))
             ->orderByDesc('spent_on')
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $vouchers->getCollection()->transform(fn (ExpenseVoucher $voucher) => [

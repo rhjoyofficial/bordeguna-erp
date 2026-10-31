@@ -25,6 +25,7 @@ use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Sales\Models\Customer;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -68,7 +69,7 @@ class IncomeVoucherController extends Controller
             ->when(! $showCorrections, fn ($query) => $query->live())
             ->orderByDesc('received_on')
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $vouchers->getCollection()->transform(fn (IncomeVoucher $voucher) => [

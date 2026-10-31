@@ -1,3 +1,4 @@
+import { Pagination } from '@/components/data-table/pagination';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -32,18 +33,6 @@ interface Punch {
     review_reason: string | null;
     note: string | null;
     recorded_by: string | null;
-}
-
-interface Paginated<T> {
-    data: T[];
-    current_page: number;
-    last_page: number;
-    from: number | null;
-    to: number | null;
-    total: number;
-    links: { url: string | null; label: string; active: boolean }[];
-    prev_page_url: string | null;
-    next_page_url: string | null;
 }
 
 interface IndexProps {
@@ -291,38 +280,7 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                     )}
                 </div>
 
-                {punches.last_page > 1 && (
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">
-                            Showing {punches.from}–{punches.to} of {punches.total}
-                        </span>
-                        <div className="flex gap-2">
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={punches.prev_page_url === null}
-                                onClick={() =>
-                                    punches.prev_page_url && router.get(punches.prev_page_url, {}, { preserveState: true, preserveScroll: true })
-                                }
-                            >
-                                Previous
-                            </Button>
-                            <span className="text-muted-foreground self-center">
-                                Page {punches.current_page} of {punches.last_page}
-                            </span>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={punches.next_page_url === null}
-                                onClick={() =>
-                                    punches.next_page_url && router.get(punches.next_page_url, {}, { preserveState: true, preserveScroll: true })
-                                }
-                            >
-                                Next
-                            </Button>
-                        </div>
-                    </div>
-                )}
+                <Pagination meta={punches} />
             </div>
         </AppLayout>
     );

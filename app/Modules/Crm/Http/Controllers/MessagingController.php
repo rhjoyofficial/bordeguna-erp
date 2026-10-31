@@ -17,6 +17,7 @@ use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Exceptions\ApprovalAlreadyDecidedException;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -415,7 +416,7 @@ class MessagingController extends Controller
                 'sent_at' => $campaign->sent_at?->format('j M Y, g:i a'),
                 'estimated_cost' => $campaign->estimated_cost,
             ],
-            'deliveries' => $campaign->deliveries()->with('contact:id,name')->latest('id')->paginate(100)
+            'deliveries' => $campaign->deliveries()->with('contact:id,name')->latest('id')->paginate(PerPage::from())
                 ->through(fn (MessageDelivery $d) => [
                     'id' => $d->id,
                     'name' => $d->contact?->name ?? 'Removed from the phone book',

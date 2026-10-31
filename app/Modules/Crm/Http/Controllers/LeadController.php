@@ -33,6 +33,7 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Support\BdGeo;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -69,7 +70,7 @@ class LeadController extends Controller
             ->tap(fn ($query) => $this->applyFilters($query, $filters))
             ->tap(fn ($query) => $this->applyQuickView($query, $filters))
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (Lead $lead) => LeadPresenter::row($lead));
 

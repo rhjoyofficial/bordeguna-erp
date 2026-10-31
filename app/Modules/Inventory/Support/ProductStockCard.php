@@ -21,6 +21,7 @@ use App\Modules\Purchasing\Models\SupplierDiscountAllocation;
 use App\Modules\Sales\Models\DeliveryLineMovement;
 use App\Modules\Sales\Models\SalesReturnLineMovement;
 use App\Support\Documents\DocumentLinks;
+use App\Support\PerPage;
 use App\Support\Traceability\BatchTrace;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -48,8 +49,6 @@ use Illuminate\Support\Collection;
  */
 final class ProductStockCard
 {
-    public const PER_PAGE = 50;
-
     /**
      * @return array{opening: array<string, mixed>|null, rows: LengthAwarePaginator, closing: array<string, string>}
      */
@@ -72,13 +71,14 @@ final class ProductStockCard
             $running[$movement->id] = [$quantity, $value];
         }
 
-        $lastPage = max(1, (int) ceil($all->count() / self::PER_PAGE));
+        $perPage = PerPage::from();
+        $lastPage = max(1, (int) ceil($all->count() / $perPage));
         $page = min(max(1, $page), $lastPage);
-        $slice = $all->forPage($page, self::PER_PAGE)->values();
+        $slice = $all->forPage($page, $perPage)->values();
 
         $opening = null;
         if ($page > 1) {
-            $before = $all->get(($page - 1) * self::PER_PAGE - 1);
+            $before = $all->get(($page - 1) * $perPage - 1);
             [$q, $v] = $running[$before->id];
             $opening = ['quantity' => BatchTrace::qty($q), 'value' => $v->format()];
         }
@@ -124,7 +124,7 @@ final class ProductStockCard
 
         return [
             'opening' => $opening,
-            'rows' => (new LengthAwarePaginator($rows, $all->count(), self::PER_PAGE, $page, ['path' => $path, 'pageName' => 'card_page']))
+            'rows' => (new LengthAwarePaginator($rows, $all->count(), $perPage, $page, ['path' => $path, 'pageName' => 'card_page']))
                 ->appends(array_filter(['warehouse' => $warehouseId])),
             'closing' => ['quantity' => BatchTrace::qty($closingQty), 'value' => $closingValue->format()],
         ];

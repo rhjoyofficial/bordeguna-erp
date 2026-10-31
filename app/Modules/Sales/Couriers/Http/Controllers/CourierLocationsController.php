@@ -16,6 +16,7 @@ use App\Modules\Sales\Couriers\Models\CourierZoneBand;
 use App\Modules\Sales\Couriers\Providers\CourierProviderDefinition;
 use App\Modules\Sales\Couriers\Providers\CourierProviderRegistry;
 use App\Support\BdGeo;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -58,7 +59,7 @@ class CourierLocationsController extends Controller
                 ->orWhere('provider_zone_name', 'like', "%{$search}%")))
             ->with('reviewer:id,name')
             ->orderBy('district')->orderBy('thana')->orderBy('area')
-            ->paginate(50)->withQueryString()
+            ->paginate(PerPage::from())->withQueryString()
             ->through(fn (CourierLocationMap $m) => [
                 'id' => $m->id,
                 'district' => $m->district,

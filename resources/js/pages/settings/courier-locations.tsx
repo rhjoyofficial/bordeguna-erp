@@ -1,3 +1,4 @@
+import { Pagination } from '@/components/data-table/pagination';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
@@ -8,7 +9,7 @@ import SettingsLayout from '@/layouts/settings/layout';
 import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { MapPin } from 'lucide-react';
 import { Fragment, useEffect, useState } from 'react';
@@ -37,15 +38,6 @@ type MapRow = {
 };
 
 type Band = { id: number; code: string; name: string; districts: string[]; thanas: string[]; is_default: boolean };
-
-type Paginated<T> = {
-    data: T[];
-    current_page: number;
-    last_page: number;
-    total: number;
-    prev_page_url: string | null;
-    next_page_url: string | null;
-};
 
 type PageProps = {
     providers: ProviderOption[];
@@ -889,31 +881,7 @@ export default function CourierLocations() {
                             </div>
                         )}
 
-                        {maps.last_page > 1 && (
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="text-muted-foreground">
-                                    {t('courier_locations.page_of', { page: maps.current_page, last: maps.last_page, total: maps.total })}
-                                </span>
-                                <div className="flex gap-2">
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={!maps.prev_page_url}
-                                        onClick={() => maps.prev_page_url && router.get(maps.prev_page_url, {}, { preserveState: true })}
-                                    >
-                                        {t('courier_locations.previous')}
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={!maps.next_page_url}
-                                        onClick={() => maps.next_page_url && router.get(maps.next_page_url, {}, { preserveState: true })}
-                                    >
-                                        {t('courier_locations.next')}
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
+                        <Pagination meta={maps} />
                     </div>
 
                     <div className="space-y-3">

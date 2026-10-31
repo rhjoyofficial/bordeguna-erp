@@ -26,6 +26,7 @@ use App\Modules\Sales\Models\CourierLossClaim;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Support\CourierStatements\CourierBalances;
 use App\Modules\Sales\Support\OrderBrand;
+use App\Support\PerPage;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -73,7 +74,7 @@ class ConsignmentController extends Controller
             // The oldest parcel still out is the one somebody should be chasing.
             ->orderBy('created_at')
             ->orderBy('id')
-            ->paginate(25)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $brandOf = OrderBrand::forDeliveries(collect($consignments->items())->pluck('delivery_id'));

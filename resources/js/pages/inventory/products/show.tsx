@@ -1,3 +1,4 @@
+import { Pagination } from '@/components/data-table/pagination';
 import { DocumentLink, type DocumentRef, useDocumentLabel } from '@/components/documents/document-link';
 import { Chip, CompactTable, inventoryCrumbs, Panel, Pill, Stat } from '@/components/inventory/inventory-ui';
 import { type JoinableFamily } from '@/components/inventory/product-family-dialogs';
@@ -517,33 +518,14 @@ export default function ProductShow({
                                 )}
                             </tbody>
                         </CompactTable>
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2">
+                        <div className="grid gap-2 border-t px-4 py-2">
                             <span className="text-muted-foreground text-xs">
                                 {t('product.col_balance')}: {formatQuantity(card.closing.quantity)} {unit} · Tk {formatMoney(card.closing.value)}
                             </span>
-                            {card.rows.last_page > 1 && (
-                                <div className="flex items-center gap-2">
-                                    <span className="text-muted-foreground text-xs">
-                                        {t('docs.page_of', { page: card.rows.current_page, last: card.rows.last_page })}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={card.rows.current_page <= 1}
-                                        onClick={() => visitCard({ ...(warehouse ? { warehouse } : {}), card_page: card.rows.current_page - 1 })}
-                                    >
-                                        {t('docs.previous')}
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={card.rows.current_page >= card.rows.last_page}
-                                        onClick={() => visitCard({ ...(warehouse ? { warehouse } : {}), card_page: card.rows.current_page + 1 })}
-                                    >
-                                        {t('docs.next')}
-                                    </Button>
-                                </div>
-                            )}
+                            <Pagination
+                                meta={card.rows}
+                                onChange={(page, perPage) => visitCard({ ...(warehouse ? { warehouse } : {}), card_page: page, per_page: perPage })}
+                            />
                         </div>
                     </Panel>
                 )}

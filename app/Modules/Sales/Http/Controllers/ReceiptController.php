@@ -20,6 +20,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Support\CustomerAdvanceBook;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -71,7 +72,7 @@ class ReceiptController extends Controller
             ->with(['customer:id,name', 'moneyAccount:id,name', 'allocations.invoice:id,invoice_number', 'createdBy:id,name'])
             ->orderByDesc('received_on')
             ->orderByDesc('id')
-            ->paginate(25)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (CustomerReceipt $receipt) => [
                 'id' => $receipt->id,

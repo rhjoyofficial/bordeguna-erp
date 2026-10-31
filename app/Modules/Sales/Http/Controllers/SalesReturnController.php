@@ -22,6 +22,7 @@ use App\Modules\Sales\Models\SalesReturn;
 use App\Modules\Sales\Support\CostVisibility;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\ReturnFormFacts;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -54,7 +55,7 @@ class SalesReturnController extends Controller
             ))
             ->orderByDesc('returned_at')
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (SalesReturn $return) => array_merge($return->toArray(), [
                 // ⚠ The Dhaka date: the date cast serialises as a UTC timestamp,

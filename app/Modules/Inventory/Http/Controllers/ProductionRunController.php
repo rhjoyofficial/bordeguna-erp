@@ -28,6 +28,7 @@ use App\Modules\Inventory\Support\MaxMakeable;
 use App\Modules\Inventory\Support\ProductionRunForm;
 use App\Modules\Inventory\Support\UnitConverter;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -55,7 +56,7 @@ class ProductionRunController extends Controller
             ->with(['warehouse:id,name', 'outputProduct:id,name,sku'])
             ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
             ->orderByDesc('id')
-            ->paginate(15)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (ProductionRun $run) => [
                 'id' => $run->id,

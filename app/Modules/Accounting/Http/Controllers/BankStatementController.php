@@ -10,6 +10,7 @@ use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Support\CorrectionScreen;
+use App\Support\PerPage;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,9 +37,6 @@ class BankStatementController extends Controller
     use ValidatesActionReason;
 
     private const MATCH_WINDOW_DAYS = 3;
-
-    /** One page of either list (FEA-007). */
-    private const PER_PAGE = 100;
 
     public function show(Request $request): Response
     {
@@ -71,7 +69,7 @@ class BankStatementController extends Controller
         $statementLines = DB::table('bank_statement_lines')
             ->where('money_account_id', $accountId)
             ->orderByDesc('txn_date')->orderByDesc('id')
-            ->paginate(self::PER_PAGE, ['*'], 'page')
+            ->paginate(PerPage::from(), ['*'], 'page')
             ->withQueryString();
 
         $claimed = DB::table('bank_statement_lines')->whereNotNull('matched_journal_line_id')->select('matched_journal_line_id');
@@ -94,7 +92,7 @@ class BankStatementController extends Controller
 
         $unmatchedBookLines = $unclaimed()
             ->orderByDesc('journals.journal_date')->orderByDesc('journal_lines.id')
-            ->paginate(self::PER_PAGE, $bookColumns, 'book_page')
+            ->paginate(PerPage::from(), $bookColumns, 'book_page')
             ->withQueryString()
             ->through($bookLine);
 

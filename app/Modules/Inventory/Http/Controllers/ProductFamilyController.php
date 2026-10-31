@@ -14,6 +14,7 @@ use App\Modules\Inventory\Models\ProductFamily;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Support\ProductFamilyOverview;
 use App\Modules\Purchasing\Support\CorrectionScreen;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -45,7 +46,7 @@ class ProductFamilyController extends Controller
             ->with(['category:id,name', 'brand:id,name'])
             ->when($search !== '', fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")))
             ->orderBy('name')
-            ->paginate(25)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $totals = ProductFamilyOverview::totals($families->getCollection()->pluck('id'));

@@ -16,6 +16,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockCount;
 use App\Modules\Inventory\Models\StockCountLine;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Support\PerPage;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -47,7 +48,7 @@ class StockCountController extends Controller
                 ->with(['warehouse:id,name', 'category:id,name', 'brand:id,name'])
                 ->withCount(['lines', 'lines as counted_lines_count' => fn ($query) => $query->whereNotNull('counted_quantity')])
                 ->orderByDesc('id')
-                ->paginate(15)
+                ->paginate(PerPage::from())
                 ->withQueryString()
                 ->through(fn (StockCount $count) => [
                     'id' => $count->id,

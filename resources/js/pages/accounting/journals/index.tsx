@@ -1,3 +1,4 @@
+import { Pagination } from '@/components/data-table/pagination';
 import { Amount, DateCell, DocNo, MUTED_ROW, StatusPill, TruncatedText } from '@/components/ledger-text';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -5,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
-import { type BreadcrumbItem, type SharedData } from '@/types';
+import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 
 interface JournalRow {
@@ -19,11 +20,6 @@ interface JournalRow {
     lines: number;
     is_reversal: boolean;
     reversed: boolean;
-}
-
-interface Paginated<T> {
-    data: T[];
-    links: { url: string | null; label: string; active: boolean }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -140,19 +136,7 @@ export default function JournalsIndex({
                     </table>
                 </div>
 
-                {journals.links.length > 3 && (
-                    <div className="flex flex-wrap gap-1">
-                        {journals.links.map((link, index) => (
-                            <Button key={index} variant={link.active ? 'secondary' : 'ghost'} size="sm" asChild={!!link.url} disabled={!link.url}>
-                                {link.url ? (
-                                    <Link href={link.url} dangerouslySetInnerHTML={{ __html: link.label }} />
-                                ) : (
-                                    <span dangerouslySetInnerHTML={{ __html: link.label }} />
-                                )}
-                            </Button>
-                        ))}
-                    </div>
-                )}
+                <Pagination meta={journals} />
             </div>
         </AppLayout>
     );

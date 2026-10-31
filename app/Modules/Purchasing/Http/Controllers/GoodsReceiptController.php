@@ -21,6 +21,7 @@ use App\Modules\Purchasing\Support\CorrectionReasons;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseReturnForm;
 use App\Modules\Purchasing\Support\ReceiptRegister;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,8 +42,6 @@ use Inertia\Response;
 class GoodsReceiptController extends Controller
 {
     use ValidatesActionReason;
-
-    private const PER_PAGE = 25;
 
     public function index(Request $request): Response
     {
@@ -96,14 +95,14 @@ class GoodsReceiptController extends Controller
 
             $page = max(1, $request->integer('page', 1));
             $receipts = new LengthAwarePaginator(
-                $all->forPage($page, self::PER_PAGE)->values(),
+                $all->forPage($page, $perPage = PerPage::from())->values(),
                 $all->count(),
-                self::PER_PAGE,
+                $perPage,
                 $page,
                 ['path' => $request->url(), 'query' => $request->query()],
             );
         } else {
-            $receipts = $query->paginate(self::PER_PAGE)->withQueryString();
+            $receipts = $query->paginate(PerPage::from())->withQueryString();
         }
 
         $receipts->setCollection($receipts->getCollection()->map(fn (GoodsReceipt $receipt) => $this->row($receipt, $register)));

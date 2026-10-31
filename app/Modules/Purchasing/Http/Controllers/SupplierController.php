@@ -30,6 +30,7 @@ use App\Modules\Purchasing\Support\TakeOffWhatTheyOwe;
 use App\Support\Documents\PartyDocuments;
 use App\Support\Documents\PartyLifetime;
 use App\Support\Lifetime\LifetimeRange;
+use App\Support\PerPage;
 use App\Support\RecordTimeline;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -261,7 +262,7 @@ class SupplierController extends Controller
             ->when($filters['status'] === 'active', fn ($query) => $query->where('is_active', true))
             ->when($filters['status'] === 'inactive', fn ($query) => $query->where('is_active', false))
             ->orderBy('name')
-            ->paginate(15)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $mayManage = $request->user()?->can('purchasing.suppliers.manage') ?? false;

@@ -26,6 +26,7 @@ use App\Modules\Sales\Support\SampleBook;
 use App\Support\Documents\PartyDocuments;
 use App\Support\Documents\PartyLifetime;
 use App\Support\Lifetime\LifetimeRange;
+use App\Support\PerPage;
 use App\Support\RecordTimeline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -203,7 +204,7 @@ class CustomerController extends Controller
             ->when($filters['status'] === 'active', fn ($query) => $query->where('is_active', true))
             ->when($filters['status'] === 'inactive', fn ($query) => $query->where('is_active', false))
             ->orderBy('name')
-            ->paginate(15)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         return Inertia::render('sales/customers/index', [

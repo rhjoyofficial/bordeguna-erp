@@ -262,14 +262,15 @@ it('pages both lists past 100 lines and still offers an old book line to match (
 
     asMatcher()->get(route('accounting.bank-statements', ['money_account_id' => $this->bank->id]))
         ->assertInertia(fn (Assert $page) => $page
-            ->has('statement_lines', 100)
+            ->has('statement_lines', 20)
             ->where('statement_pages.total', 150)
-            ->where('statement_pages.last', 2)
-            ->has('unmatched_book_lines', 100)
+            ->where('statement_pages.last', 8)
+            ->has('unmatched_book_lines', 20)
             ->where('book_pages.total', 121)
             ->where('match_candidates', fn ($candidates) => collect($candidates)->pluck('id')->contains($this->bookLine)));
 
-    asMatcher()->get(route('accounting.bank-statements', ['money_account_id' => $this->bank->id, 'page' => 2, 'book_page' => 2]))
+    // 31 Oct 2026: the footer's rows-per-page applies to both lists.
+    asMatcher()->get(route('accounting.bank-statements', ['money_account_id' => $this->bank->id, 'per_page' => 50, 'page' => 3, 'book_page' => 3]))
         ->assertInertia(fn (Assert $page) => $page->has('statement_lines', 50)->has('unmatched_book_lines', 21));
 });
 

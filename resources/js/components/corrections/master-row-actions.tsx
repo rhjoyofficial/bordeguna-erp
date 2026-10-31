@@ -16,14 +16,16 @@ export interface MasterRowState {
     switch_blocked: string | null;
 }
 
-/** A blocked button stays visible, greyed, with its reason (FINAL-PLAN 2). */
+/**
+ * A blocked button stays visible, greyed (FINAL-PLAN 2). Its reason shows on
+ * hover, not as a sentence under every row (Joy, 31 Oct 2026: no clutter).
+ */
 function Greyed({ label, reason }: { label: string; reason: string }) {
     return (
-        <span className="inline-flex max-w-64 flex-col items-end gap-0.5 align-top">
-            <Button size="sm" variant="ghost" disabled title={reason}>
+        <span title={reason} className="inline-block cursor-help">
+            <Button size="sm" variant="ghost" disabled>
                 {label}
             </Button>
-            <span className="text-muted-foreground text-right text-[11px] leading-tight">{reason}</span>
         </span>
     );
 }
@@ -87,7 +89,7 @@ export function MasterRowActions({ state, name, reasons }: { state: MasterRowSta
         return state.switch_blocked ? (
             <Greyed label={t('master.switch_off')} reason={state.switch_blocked} />
         ) : (
-            <span className="inline-flex max-w-64 flex-col items-end gap-0.5 align-top">
+            <span title={state.delete_blocked ?? undefined} className="inline-block">
                 <CorrectionReasonDialog
                     trigger={
                         <Button size="sm" variant="ghost">
@@ -100,7 +102,6 @@ export function MasterRowActions({ state, name, reasons }: { state: MasterRowSta
                     submitUrl={`${base}/switch-off`}
                     confirmLabel={t('master.switch_off')}
                 />
-                <span className="text-muted-foreground text-right text-[11px] leading-tight">{state.delete_blocked}</span>
             </span>
         );
     }

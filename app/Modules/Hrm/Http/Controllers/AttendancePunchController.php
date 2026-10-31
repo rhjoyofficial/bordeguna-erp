@@ -3,14 +3,18 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\RecordPunch;
 use App\Modules\Hrm\Enums\PunchDirection;
 use App\Modules\Hrm\Enums\PunchSource;
 use App\Modules\Hrm\Models\AttendancePunch;
 use App\Modules\Hrm\Models\Employee;
+use App\Support\PerPage;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
@@ -62,7 +66,7 @@ class AttendancePunchController extends Controller
         ];
 
         $punches = $this->sorted($query, $sort, $direction)
-            ->paginate(100)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (AttendancePunch $punch) => $this->present($punch));
 
@@ -153,8 +157,8 @@ class AttendancePunchController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Builder<AttendancePunch>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<AttendancePunch>
+     * @param  Builder<AttendancePunch>  $query
+     * @return Builder<AttendancePunch>
      */
     private function sorted($query, string $sort, string $direction)
     {
@@ -172,7 +176,7 @@ class AttendancePunchController extends Controller
 
     private function businessId(): int
     {
-        return app(\App\Modules\Foundation\Support\BusinessContext::class)->id();
+        return app(BusinessContext::class)->id();
     }
 
     /**
@@ -209,7 +213,7 @@ class AttendancePunchController extends Controller
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     * @return Collection<int, array<string, mixed>>
      */
     private function employeeOptions()
     {

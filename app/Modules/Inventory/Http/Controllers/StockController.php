@@ -26,6 +26,7 @@ use App\Modules\Inventory\Models\StockTransfer;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\AdjustmentCause;
 use App\Modules\Inventory\Support\AvailableToSell;
+use App\Support\PerPage;
 use App\Support\Traceability\BatchSuppliers;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -123,7 +124,7 @@ class StockController extends Controller
             // ⚠ The unit rides along: "12" of rice means nothing until it says
             // kg or bags, and the list used to say neither.
             ->with(['product:id,name,sku,type,material_kind,low_stock_threshold,unit_of_measure_id', 'product.unitOfMeasure:id,abbreviation', 'warehouse:id,name,not_for_sale'])
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         // ⭐ B17 (25 Oct 2026, Q4 = A): beside on hand, what confirmed orders
@@ -551,7 +552,7 @@ class StockController extends Controller
         ])
             ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
             ->latest('dispatched_at')
-            ->paginate(15)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         // ⭐ Corrections wave 1 (20 Oct 2026): Cancel and Receive part on a

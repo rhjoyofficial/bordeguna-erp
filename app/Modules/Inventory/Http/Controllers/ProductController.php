@@ -33,6 +33,7 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Enums\PricingMode;
 use App\Support\Lifetime\LifetimeCsv;
 use App\Support\Lifetime\LifetimeRange;
+use App\Support\PerPage;
 use App\Support\Traceability\BatchTrace;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -138,7 +139,7 @@ class ProductController extends Controller
             ->orderByRaw('COALESCE((SELECT product_families.name FROM product_families WHERE product_families.id = products.product_family_id), products.name)')
             ->orderBy('product_family_id')
             ->orderBy('products.id')
-            ->paginate(15)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         // ⭐ B24 (24 Oct 2026, Q5 = A): each row's Delete (never used, to the

@@ -21,6 +21,7 @@ use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\NotForSale;
 use App\Modules\Sales\Support\ResolvedPrice;
 use App\Support\DocumentNumber;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -49,7 +50,7 @@ class QuotationController extends Controller
         $quotations = DB::table('quotations')
             ->where('business_id', $businessId)
             ->orderByDesc('id')
-            ->paginate(20);
+            ->paginate(PerPage::from());
 
         $customerNames = Customer::query()->whereIn('id', collect($quotations->items())->pluck('customer_id')->filter())->pluck('name', 'id');
         $leadNames = Lead::query()->whereIn('id', collect($quotations->items())->pluck('lead_id')->filter())->pluck('name', 'id');

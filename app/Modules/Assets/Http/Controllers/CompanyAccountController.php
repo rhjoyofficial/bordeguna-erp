@@ -18,6 +18,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\CsvSafe;
 use App\Modules\Hrm\Models\Employee;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -74,7 +75,7 @@ class CompanyAccountController extends Controller
             ->when($filters['responsible'] ?? null, fn (Builder $query, $id) => $query->where('responsible_employee_id', $id))
             ->when($filters['renewing'] ?? null, fn (Builder $query) => $query->whereNotNull('renews_on')->whereDate('renews_on', '<=', $today->copy()->addDays(CompanyAccount::REMIND_DAYS_FIRST)->toDateString()))
             ->orderBy('kind')->orderBy('name')
-            ->paginate(30)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $accounts->getCollection()->transform(fn (CompanyAccount $account) => [

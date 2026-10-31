@@ -1,5 +1,5 @@
+import { Pagination } from '@/components/data-table/pagination';
 import { Chip, CompactTable, Panel, Pill } from '@/components/inventory/inventory-ui';
-import { Button } from '@/components/ui/button';
 import { showDate } from '@/lib/dates';
 import { type TranslationKey, useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
@@ -108,32 +108,11 @@ export function PartyDocumentsPanel({
                     )}
                 </tbody>
             </CompactTable>
-            {rows.last_page > 1 && (
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2">
-                    <span className="text-muted-foreground text-xs">
-                        {t('docs.showing', { from: rows.from ?? 0, to: rows.to ?? 0, total: rows.total })}
-                    </span>
-                    <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground text-xs">{t('docs.page_of', { page: rows.current_page, last: rows.last_page })}</span>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={rows.current_page <= 1}
-                            onClick={() => visit({ ...(type ? { doc_type: type } : {}), docs_page: rows.current_page - 1 })}
-                        >
-                            {t('docs.previous')}
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={rows.current_page >= rows.last_page}
-                            onClick={() => visit({ ...(type ? { doc_type: type } : {}), docs_page: rows.current_page + 1 })}
-                        >
-                            {t('docs.next')}
-                        </Button>
-                    </div>
-                </div>
-            )}
+            <Pagination
+                className="border-t px-4 py-2"
+                meta={rows}
+                onChange={(page, perPage) => visit({ ...(type ? { doc_type: type } : {}), docs_page: page, per_page: perPage })}
+            />
         </Panel>
     );
 }

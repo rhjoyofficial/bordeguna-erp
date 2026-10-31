@@ -13,6 +13,7 @@ use App\Modules\Foundation\Models\DocumentFolder;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\FileVisibility;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -170,7 +171,7 @@ class FileManagerController extends Controller
             ->when($filters['from'] !== '', fn (Builder $q) => $q->whereDate('created_at', '>=', $filters['from']))
             ->when($filters['to'] !== '', fn (Builder $q) => $q->whereDate('created_at', '<=', $filters['to']))
             ->latest('id')
-            ->paginate(40)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through($row);
 

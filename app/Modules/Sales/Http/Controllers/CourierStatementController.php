@@ -20,6 +20,7 @@ use App\Modules\Sales\Support\CourierStatements\CourierBalances;
 use App\Modules\Sales\Support\CourierStatements\CourierStatementFormats;
 use App\Modules\Sales\Support\CourierStatements\CourierStatementReview;
 use App\Modules\Sales\Support\CourierStatements\CourierStatementWorkbook;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -45,7 +46,7 @@ class CourierStatementController extends Controller
                 ->withCount('lines')
                 ->orderByDesc('statement_date')
                 ->orderByDesc('id')
-                ->paginate(25)
+                ->paginate(PerPage::from())
                 ->through(fn (CourierStatement $statement) => [
                     'id' => $statement->id,
                     'courier' => $statement->courier?->name,

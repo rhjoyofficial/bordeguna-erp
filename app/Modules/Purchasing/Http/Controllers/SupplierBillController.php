@@ -46,6 +46,7 @@ use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use App\Modules\Purchasing\Support\SupplierCredit;
 use App\Modules\Purchasing\Support\TakeOffWhatTheyOwe;
 use App\Support\Documents\RelatedDocuments;
+use App\Support\PerPage;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -114,7 +115,7 @@ class SupplierBillController extends Controller
             ->when($filters['status'], $byStatus)
             ->orderByDesc('bill_date')
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(function (SupplierBill $bill) use ($today, $owing) {
                 $outstanding = PurchaseOrderBilling::outstandingOf($bill);

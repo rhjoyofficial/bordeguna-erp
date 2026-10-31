@@ -12,6 +12,7 @@ use App\Modules\Sales\Models\CreditTermsRequest;
 use App\Modules\Sales\Models\CreditTermsRequestLine;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Support\CreditTermsCsv;
+use App\Support\PerPage;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,7 +46,7 @@ class CreditTermsController extends Controller
         $requests = CreditTermsRequest::query()
             ->with(['requestedBy:id,name', 'approvalRequest', 'appliedBy:id,name'])
             ->latest('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (CreditTermsRequest $r) => $this->row($r));
 

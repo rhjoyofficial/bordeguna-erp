@@ -48,6 +48,7 @@ use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
+use App\Support\PerPage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -112,7 +113,7 @@ class VoucherController extends Controller
             ->orderByRaw("CASE WHEN status = 'draft' THEN 0 ELSE 1 END")
             ->orderByDesc('voucher_date')
             ->orderByDesc('id')
-            ->paginate(25)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         return Inertia::render('accounting/vouchers/index', [

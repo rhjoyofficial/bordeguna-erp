@@ -19,6 +19,7 @@ use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Support\DeliveredBatches;
 use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\ReservedStockPass;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -65,7 +66,7 @@ class DeliveryController extends Controller
             ))
             ->orderByDesc('delivered_at')
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $brandOf = OrderBrand::forDeliveries(collect($deliveries->items())->pluck('id'));

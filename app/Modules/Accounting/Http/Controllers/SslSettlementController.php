@@ -18,6 +18,7 @@ use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Support\CorrectionScreen;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -53,7 +54,7 @@ class SslSettlementController extends Controller
             ->with(['bank:id,name', 'feeAccount:id,code,name', 'reversedBy:id,name', 'attachments'])
             ->when(! $showCorrections, fn ($query) => $query->live())
             ->orderByDesc('settled_on')->orderByDesc('id')
-            ->paginate(25)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (SslSettlement $s) => [
                 'id' => $s->id,

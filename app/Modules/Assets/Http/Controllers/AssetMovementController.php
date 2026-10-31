@@ -19,6 +19,7 @@ use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -50,7 +51,7 @@ class AssetMovementController extends Controller
             ->when($filters['kind'] ?? null, fn (Builder $query, $kind) => $query->where('kind', $kind))
             ->when($filters['open'] ?? false, fn (Builder $query) => $query->where('status', AssetMovementStatus::Dispatched->value))
             ->orderByDesc('id')
-            ->paginate(30)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $movements->getCollection()->transform(fn (AssetMovement $movement) => $this->row($movement));

@@ -12,6 +12,7 @@ use App\Modules\Inventory\Enums\StockRequestType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Support\PerPage;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,7 +45,7 @@ class StockRequestController extends Controller
                 fn ($query, $status) => $query->whereHas('approvalRequest', fn ($q) => $q->where('status', $status))
             )
             ->latest()
-            ->paginate(15)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         return Inertia::render('inventory/stock-requests/index', [

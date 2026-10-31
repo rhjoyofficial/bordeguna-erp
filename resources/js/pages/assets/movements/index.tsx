@@ -189,12 +189,7 @@ export default function AssetMovementsIndex({
                                 ))}
                             </tbody>
                         </CompactTable>
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3.5 py-2">
-                            <p className="text-muted-foreground text-xs">
-                                Newest first. A hand-over is never edited: a mistake is put right with another one.
-                            </p>
-                            <Pagination meta={movements} />
-                        </div>
+                        <Pagination className="border-t px-3.5 py-2" meta={movements} />
                     </div>
                 )}
             </div>

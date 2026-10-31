@@ -21,6 +21,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Support\CorrectionReasons;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -56,7 +57,7 @@ class FixedAssetController extends Controller
             ->withSum('depreciations', 'amount')
             ->orderByDesc('acquired_on')
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $assets->getCollection()->transform(fn (FixedAsset $asset) => [

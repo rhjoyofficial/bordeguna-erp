@@ -92,6 +92,7 @@ use App\Modules\Sales\Support\SalesOrderOrigin;
 use App\Support\BdGeo;
 use App\Support\Dashboards\Widgets\CourierWidget;
 use App\Support\Documents\RelatedDocuments;
+use App\Support\PerPage;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
@@ -178,7 +179,7 @@ class SalesOrderController extends Controller
             ->when($filters['queue'], fn ($query, $queue) => self::inQueue($query, $queue))
             ->orderByDesc('ordered_at')
             ->orderByDesc('id')
-            ->paginate(15)
+            ->paginate(PerPage::from())
             ->withQueryString();
         // ⭐ B18: where each order stands, in one word, read for the whole page.
         $stages = OrderStage::forOrders(collect($orders->items()));

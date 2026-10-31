@@ -157,7 +157,7 @@ it('filters the supplier documents by type and pages them', function () {
             ->where('all_documents.type', 'supplier_bill')
             ->where('all_documents.rows.total', 30)
             ->where('all_documents.rows.current_page', 2)
-            ->has('all_documents.rows.data', 5));
+            ->has('all_documents.rows.data', 10));
 });
 
 it('leaves out supplier documents the viewer may not read', function () {

@@ -10,6 +10,7 @@ use App\Modules\Assets\Actions\ChargeDepreciation;
 use App\Modules\Assets\Models\FixedAsset;
 use App\Modules\Assets\Models\FixedAssetDepreciation;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -38,7 +39,7 @@ class DepreciationController extends Controller
             ->orderByDesc('year')
             ->orderByDesc('month')
             ->orderBy('fixed_asset_id')
-            ->paginate(50)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $charges->getCollection()->transform(fn (FixedAssetDepreciation $charge) => [

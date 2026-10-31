@@ -31,6 +31,7 @@ use App\Modules\Purchasing\Models\WithholdingRate;
 use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use App\Support\Documents\RelatedDocuments;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -68,7 +69,7 @@ class SupplierAdvanceController extends Controller
             ->when(in_array($filters['state'], ['open', 'posted'], true), fn ($query) => $query->whereNull('reversed_at'))
             ->orderByDesc('paid_on')
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (SupplierAdvance $advance) => $this->row($advance));
 

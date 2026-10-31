@@ -620,10 +620,7 @@ export default function ProductsIndex({
                     )}
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-muted-foreground text-xs">Inactive items stay on old documents and are hidden from Sales and Purchases.</p>
-                    <Pagination meta={products} />
-                </div>
+                <Pagination meta={products} />
 
                 <ProductDialog
                     open={dialogOpen}

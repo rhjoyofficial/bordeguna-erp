@@ -12,6 +12,7 @@ use App\Modules\Hrm\Enums\JobOpeningStatus;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\JobApplicant;
 use App\Modules\Hrm\Models\JobOpening;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -78,7 +79,7 @@ class RecruitmentController extends Controller
             })
             ->orderByDesc('applied_on')
             ->orderByDesc('id')
-            ->paginate(40)
+            ->paginate(PerPage::from())
             ->withQueryString()
             ->through(fn (JobApplicant $a) => [
                 'id' => $a->id,

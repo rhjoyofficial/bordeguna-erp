@@ -17,6 +17,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Purchasing\Support\PurchasesPulse;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -56,7 +57,7 @@ class SupplierCreditNoteController extends Controller
             ->when($filters['state'] === 'posted', fn ($query) => $query->whereNull('reversed_at'))
             ->orderByDesc('credit_date')
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate(PerPage::from())
             ->withQueryString();
 
         $creditNotes->getCollection()->transform(function (SupplierCreditNote $creditNote) {
