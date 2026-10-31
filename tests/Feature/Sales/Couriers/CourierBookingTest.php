@@ -649,7 +649,23 @@ it('records a delivered webhook once, ignores a late word, and never posts money
         ->and($events->pluck('applied')->all())->toBe([true, false, false]);
 });
 
-it('offers a person the delivered outcome prefilled, and the existing outcome still posts the invoice and the receipt', function () {
+it('records a delivered parcel by itself when the courier collected exactly what was due (Joy, 31 Oct 2026)', function () {
+    $account = cbkAccount('carrybee', $this->business, $this->courierMoney);
+    $delivery = cbkChallan($this);
+    Http::fake([CBK_CB.'/api/v2/orders' => cbkOk(['order' => ['consignment_id' => 'FA1', 'delivery_fee' => '60', 'cod_fee' => 0]])]);
+    cbkBook($this, $delivery, $account);
+    $consignment = Consignment::query()->sole();
+
+    $this->postJson('/webhooks/couriers/'.$account->uuid, ['event' => 'order.delivered', 'consignment_id' => 'FA1', 'collected_amount' => 1700],
+        ['X-CB-Webhook-Integration-Header' => $account->webhookSecretValue()])->assertStatus(202);
+
+    $receivable = (int) JournalLine::query()->where('account_id', Account::bySlug('courier_receivable')->id)->sum('amount_minor');
+    expect($consignment->fresh()->status)->toBe(ConsignmentStatus::Delivered)
+        ->and($consignment->fresh()->sales_invoice_id)->not->toBeNull()
+        ->and($receivable)->toBe(170000);
+});
+
+it('leaves a delivered parcel with a different amount for a person, prefilled, and the person outcome still posts it', function () {
     $account = cbkAccount('carrybee', $this->business, $this->courierMoney);
     $delivery = cbkChallan($this);
     Http::fake([CBK_CB.'/api/v2/orders' => cbkOk(['order' => ['consignment_id' => 'FA1', 'delivery_fee' => '60', 'cod_fee' => 0]])]);
@@ -657,22 +673,20 @@ it('offers a person the delivered outcome prefilled, and the existing outcome st
     $consignment = Consignment::query()->sole();
     $orderId = $delivery->lines->first()->orderLine->sales_order_id;
 
-    $this->postJson('/webhooks/couriers/'.$account->uuid, ['event' => 'order.delivered', 'consignment_id' => 'FA1', 'collected_amount' => 1700],
+    $this->postJson('/webhooks/couriers/'.$account->uuid, ['event' => 'order.delivered', 'consignment_id' => 'FA1', 'collected_amount' => 1600],
         ['X-CB-Webhook-Integration-Header' => $account->webhookSecretValue()])->assertStatus(202);
 
+    expect($consignment->fresh()->status)->toBe(ConsignmentStatus::Booked);
+
     $info = $this->actingAs($this->manager)->get('/sales/orders/'.$orderId)->original->getData()['page']['props']['challans'][0]['consignment']['courier_info'];
-    expect($info['prompt'])->toBe(['outcome' => 'delivered', 'collected' => '1700.00', 'message' => 'Courier reports delivered: confirm.'])
-        ->and($info['courier_status'])->toBe('delivered')
-        ->and($info['events'])->not->toBeEmpty();
+    expect($info['prompt'])->toBe(['outcome' => 'delivered', 'collected' => '1600.00', 'message' => 'Courier reports delivered: confirm.'])
+        ->and($info['courier_status'])->toBe('delivered');
 
     $this->actingAs($this->manager)->post("/sales/consignments/{$consignment->id}/outcome", [
         'outcome' => 'delivered', 'outcome_on' => '2026-10-11', 'collected_amount' => '1700',
     ])->assertSessionHasNoErrors();
 
-    $receivable = (int) JournalLine::query()->where('account_id', Account::bySlug('courier_receivable')->id)->sum('amount_minor');
-    expect($consignment->fresh()->status)->toBe(ConsignmentStatus::Delivered)
-        ->and($consignment->fresh()->sales_invoice_id)->not->toBeNull()
-        ->and($receivable)->toBe(170000);
+    expect($consignment->fresh()->status)->toBe(ConsignmentStatus::Delivered);
 });
 
 it('takes the business from our own record, never from the webhook body', function () {

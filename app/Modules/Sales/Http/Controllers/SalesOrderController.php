@@ -1651,7 +1651,11 @@ class SalesOrderController extends Controller
         $data = $request->validate([
             'credit_override_reason' => ['nullable', 'string', 'max:500'],
             'backorder_reason' => ['nullable', 'string', 'max:1000'],
+            // ⭐ Order desk (Joy's decision 3, 31 Oct 2026): "Approve and book".
+            'book' => ['nullable', 'boolean'],
         ]);
+
+        $bookWith = $request->boolean('book') ? OrderDeskBooking::account(null, $request->user()) : null;
 
         try {
             $action->handle($order, $request->user(), $data['credit_override_reason'] ?? null, $data['backorder_reason'] ?? null);
@@ -1659,6 +1663,10 @@ class SalesOrderController extends Controller
             throw $e;
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             return back()->with('error', $e->getMessage());
+        }
+
+        if ($bookWith !== null) {
+            return back()->with('success', str_replace('recorded', 'approved', OrderDeskBooking::start($order, $bookWith, $request->user())));
         }
 
         return back()->with('success', 'Sales order approved.');

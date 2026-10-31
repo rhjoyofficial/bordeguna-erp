@@ -166,3 +166,16 @@ it('refuses Save and book to someone who may not book parcels, before writing an
 
     expect(SalesOrder::query()->count())->toBe(0);
 });
+
+it('approves a waiting order and sends it to the courier in one press (Joy decision 3)', function () {
+    Queue::fake();
+    ($this->post)([], $this->staff)->assertSessionHasNoErrors();
+    $order = ($this->latest)();
+    expect($order->approvalRequest->isPending())->toBeTrue();
+
+    $this->actingAs($this->owner)->post("/sales/orders/{$order->id}/approve", ['book' => true])
+        ->assertSessionHas('success', fn (string $message) => str_contains($message, 'approved and sent to CarryBee LaLaDia'));
+
+    expect(CourierBulkRunItem::query()->sole()->sales_order_id)->toBe($order->id);
+    Queue::assertPushed(BookParcelsInBulk::class);
+});

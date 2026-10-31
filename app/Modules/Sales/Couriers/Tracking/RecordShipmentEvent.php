@@ -18,10 +18,12 @@ use Throwable;
  * Writes one courier word onto a parcel's timeline and, when it is newer and
  * allowed, moves the parcel's COURIER status.
  *
- * ⚠⚠ NEVER MONEY. This touches the courier_* columns and nothing else: not
- * `status`, not an invoice, not a receipt, not a journal. "Delivered" from a
- * courier makes the order screen ask a person to confirm through the existing
- * outcome action (ruling 1: a webhook is a notification, not evidence).
+ * ⚠⚠ NEVER MONEY HERE. This touches the courier_* columns and nothing else:
+ * not `status`, not an invoice, not a receipt, not a journal. Since 31 Oct
+ * 2026 (Joy's decision 2) a "Delivered" whose collected amount is exactly the
+ * amount due is handed AFTER this transaction to AutoDeliverFromCourier, which
+ * records it through the person's own outcome action; any other "Delivered"
+ * still asks a person to confirm (ruling 1, relaxed only for exact matches).
  *
  * ⚠ Idempotent: the same (event, occurred_at) twice is one row, and the second
  * changes nothing. A late word (older than the last one applied, or anything
@@ -143,6 +145,13 @@ class RecordShipmentEvent
 
         if ($applied) {
             CourierParcelChanged::dispatch(CourierParcelChanged::STATUS, (int) $parcel->business_id, (int) $parcel->delivery_id, (int) $parcel->id, $word->status?->value);
+        }
+
+        // ⭐ Joy's decision 2 (31 Oct 2026): delivered with exactly the amount
+        // due is recorded by itself, through the person's own action; every
+        // other case still waits for a person (AutoDeliverFromCourier).
+        if ($applied && $word->status === CourierStatus::Delivered) {
+            AutoDeliverFromCourier::attempt($parcel);
         }
 
         return $row;
