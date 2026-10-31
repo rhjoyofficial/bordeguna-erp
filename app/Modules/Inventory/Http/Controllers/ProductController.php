@@ -499,6 +499,39 @@ class ProductController extends Controller
     }
 
     /**
+     * ⭐ 31 Oct 2026: mark several raw materials Raw or Packaging at once, from
+     * the raw materials list. Labels, caps and poly were set up as Raw, which
+     * muddles the recipe subtotals and the stock page's Packaging tab.
+     *
+     * Only raw materials (a finished good has no kind), only this business's
+     * products (the scoped model), each through the model so the audit trail
+     * records every change. Posts nothing: a kind is a label, not a movement.
+     */
+    public function setMaterialKind(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:200'],
+            'ids.*' => ['integer', 'distinct'],
+            'material_kind' => ['required', new Enum(MaterialKind::class)],
+        ]);
+
+        $kind = MaterialKind::from($data['material_kind']);
+
+        $products = Product::query()
+            ->whereIn('id', $data['ids'])
+            ->where('type', ProductType::RawMaterial)
+            ->get();
+
+        foreach ($products as $product) {
+            if ($product->material_kind !== $kind) {
+                $product->update(['material_kind' => $kind]);
+            }
+        }
+
+        return back()->with('success', $products->count().' '.($products->count() === 1 ? 'item' : 'items').' marked '.ucfirst($kind->value).'.');
+    }
+
+    /**
      * ⚠ Deactivation used to be a one-way door: a raw material switched off by a
      * stray click (15 Oct 2026) could not be switched back on from any screen,
      * and its SKU blocked re-creating it. Nothing else about the product moves.

@@ -137,6 +137,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::get('products/sku-proposal', [ProductController::class, 'skuProposal'])->name('products.sku-proposal');
 
         Route::post('products', [ProductController::class, 'store'])->name('products.store');
+        Route::post('products/material-kind', [ProductController::class, 'setMaterialKind'])->name('products.material-kind');
         Route::put('products/{product}', [ProductController::class, 'update'])->name('products.update');
         Route::delete('products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
         // The way back from a stray Deactivate (15 Oct 2026); same gate as the change it undoes.

@@ -13,7 +13,7 @@ import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type Paginated, type SharedData } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { ChevronDown, ChevronRight, Loader2, Search } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 
@@ -148,6 +148,18 @@ export default function ProductsIndex({
     // Finance were offered them and met a 403 dressed as "reload the page".
     const { manageCatalog } = useInventoryAbilities();
     const { t } = useTranslation();
+    // 31 Oct 2026: tick raw materials, then mark them Raw or Packaging together.
+    const [picked, setPicked] = useState<number[]>([]);
+    const [marking, setMarking] = useState(false);
+    const togglePicked = (id: number) => setPicked((now) => (now.includes(id) ? now.filter((x) => x !== id) : [...now, id]));
+    const markKind = (kind: 'raw' | 'packaging') => {
+        setMarking(true);
+        router.post(
+            '/inventory/products/material-kind',
+            { ids: picked, material_kind: kind },
+            { preserveScroll: true, onSuccess: () => setPicked([]), onFinish: () => setMarking(false) },
+        );
+    };
     const isRaw = kind === 'raw';
     const base = isRaw ? '/inventory/raw-materials' : '/inventory/products';
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters(base, initialFilters);
@@ -196,7 +208,6 @@ export default function ProductsIndex({
                     <span title={t('ipc.made_here_hint')}>{t('ipc.made_here')}</span>
                 </Pill>
             )}
-            {product.material_kind === 'packaging' && <Pill tone="info">{t('ipc.packaging')}</Pill>}
             {isRaw
                 ? product.can_be_sold && <Pill tone="info">{t('ipc.sale.label')}</Pill>
                 : !product.can_be_sold && <Pill tone="muted">{t('ipc.not_for_sale')}</Pill>}
@@ -414,13 +425,43 @@ export default function ProductsIndex({
                     </div>
                 </CompactControls>
 
+                {isRaw && manageCatalog && picked.length > 0 && (
+                    <div className="bg-muted/60 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                        <span className="font-medium">{picked.length} selected</span>
+                        <Button size="sm" disabled={marking} onClick={() => markKind('packaging')}>
+                            Mark as Packaging
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={marking} onClick={() => markKind('raw')}>
+                            Mark as Raw
+                        </Button>
+                        <button
+                            type="button"
+                            onClick={() => setPicked([])}
+                            className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+                        >
+                            Clear selection
+                        </button>
+                    </div>
+                )}
+
                 <div className="bg-card text-card-foreground rounded-xl border">
                     {isRaw ? (
                         <CompactTable minWidth="48rem">
                             <thead>
                                 <tr className="text-muted-foreground">
+                                    <th className="w-8">
+                                        {manageCatalog && (
+                                            <input
+                                                type="checkbox"
+                                                aria-label="Select all on this page"
+                                                checked={products.data.length > 0 && products.data.every((row) => picked.includes(row.id))}
+                                                onChange={(e) => setPicked(e.target.checked ? products.data.map((row) => row.id) : [])}
+                                            />
+                                        )}
+                                    </th>
                                     <th>SKU</th>
                                     <th>Raw material</th>
+                                    <th>Kind</th>
                                     <th>Category</th>
                                     <th>Stocked in</th>
                                     <th>
@@ -439,6 +480,16 @@ export default function ProductsIndex({
                                 {body(
                                     (product) => (
                                         <tr key={product.id} className={cn(!product.is_active && 'text-muted-foreground')}>
+                                            <td>
+                                                {manageCatalog && (
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label={`Select ${product.name}`}
+                                                        checked={picked.includes(product.id)}
+                                                        onChange={() => togglePicked(product.id)}
+                                                    />
+                                                )}
+                                            </td>
                                             <td className="font-mono text-xs">{product.sku}</td>
                                             <td>
                                                 <span className="inline-flex flex-wrap items-center gap-1.5">
@@ -451,6 +502,11 @@ export default function ProductsIndex({
                                                     </Link>
                                                     {flags(product)}
                                                 </span>
+                                            </td>
+                                            <td>
+                                                <Pill tone={product.material_kind === 'packaging' ? 'info' : 'muted'}>
+                                                    {product.material_kind === 'packaging' ? 'Packaging' : 'Raw'}
+                                                </Pill>
                                             </td>
                                             <td className="text-muted-foreground">{product.category ?? '-'}</td>
                                             <td className="text-muted-foreground">{product.unit}</td>
@@ -474,7 +530,7 @@ export default function ProductsIndex({
                                             <td className="text-right">{actions(product)}</td>
                                         </tr>
                                     ),
-                                    4,
+                                    6,
                                     3,
                                 )}
                                 {products.data.length === 0 && <tr>{empty}</tr>}
