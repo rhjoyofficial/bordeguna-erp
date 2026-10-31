@@ -262,7 +262,7 @@ export default function CalendarsIndex({ calendars, weekdays, recordActions, del
 
                 {calendars.length === 0 ? (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                        <p className="text-muted-foreground text-sm">No calendars yet. Create one to define weekly off-days and holidays.</p>
+                        <p className="text-muted-foreground text-sm">No calendars yet.</p>
                     </div>
                 ) : (
                     calendars.map((calendar) => (

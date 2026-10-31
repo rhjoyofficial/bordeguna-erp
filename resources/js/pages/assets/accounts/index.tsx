@@ -110,10 +110,7 @@ export default function CompanyAccountsIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Accounts hub" />
             <div className="flex flex-col gap-3 p-4">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <p className="text-muted-foreground max-w-2xl text-sm">
-                        Every online account the business owns, who answers for it, and who can sign in.
-                    </p>
+                <div className="flex flex-wrap items-end justify-end gap-3">
                     <div className="flex flex-wrap gap-2">
                         <Button variant="outline" size="sm" asChild>
                             <a href="/assets/accounts/export">Export</a>

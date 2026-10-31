@@ -396,10 +396,7 @@ export default function RecurringExpensesIndex({ canRecord, due, schedules, tota
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Recurring expenses" />
             <div className="flex flex-col gap-4 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-muted-foreground text-sm">
-                        Subscriptions and monthly bills the ERP predicts. Nothing is posted until somebody records the expense.
-                    </p>
+                <div className="flex flex-wrap items-center justify-end gap-3">
                     <div className="flex flex-wrap items-center gap-2">
                         <>
                             {/* The engine's rendering of this same list: PDF, Excel,

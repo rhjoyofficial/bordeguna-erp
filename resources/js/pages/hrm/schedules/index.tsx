@@ -422,9 +422,7 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Assignments</h3>
                     {assignments.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">
-                            Nothing assigned yet. Start with a business-wide schedule, then override per office, department, section or person.
-                        </p>
+                        <p className="text-muted-foreground text-sm">Nothing assigned yet.</p>
                     ) : (
                         <table className="w-full min-w-[64rem] text-sm">
                             <thead>

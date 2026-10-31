@@ -94,8 +94,6 @@ export default function OutstandingOrders({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('outstanding.title')} />
             <div className="flex flex-col gap-4 p-4">
-                <p className="text-muted-foreground text-sm">{t('outstanding.intro')}</p>
-
                 <div className="flex flex-wrap gap-3">
                     <div className="bg-card rounded-xl border px-4 py-3">
                         <p className="text-muted-foreground text-xs">

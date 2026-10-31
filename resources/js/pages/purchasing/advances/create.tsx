@@ -129,11 +129,6 @@ export default function AdvanceCreate({
                     </span>
                 </div>
 
-                <p className="text-muted-foreground max-w-2xl text-sm">
-                    Money paid before the supplier&apos;s bill. It is held as an advance (what the supplier owes us in goods) until a bill uses it or
-                    the supplier refunds it.
-                </p>
-
                 <div className="flex flex-wrap items-start gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="supplier_id" required>

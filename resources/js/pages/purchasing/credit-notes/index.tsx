@@ -57,8 +57,7 @@ export default function CreditNotesIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Supplier credit notes" />
             <div className="flex flex-col gap-4 p-4">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <p className="text-muted-foreground text-sm">What a supplier owes us back, after goods went back once the bill had arrived.</p>
+                <div className="flex flex-wrap items-end justify-end gap-3">
                     {can_record && (
                         <Button size="sm" asChild>
                             <Link href="/purchasing/credit-notes/new">Record credit note</Link>

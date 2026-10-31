@@ -97,7 +97,7 @@ const SERIES = [
  */
 function AttendanceTrendChart({ trend }: { trend: Trend }) {
     if (trend.rows === 0) {
-        return <p className="text-muted-foreground text-sm">No attendance has been processed in this period, so there is nothing to chart yet.</p>;
+        return <p className="text-muted-foreground text-sm">No attendance processed in this period.</p>;
     }
 
     const max = Math.max(1, ...trend.points.map((p) => p.present + p.late + p.absent + p.leave + p.off));

@@ -91,8 +91,7 @@ export default function PaymentsIndex({
             <Head title="Supplier payments" />
             <div className="flex flex-col gap-4 p-4">
                 <PendingApprovalsNotice count={pending_approvals} what={pending_approvals === 1 ? 'payment is' : 'payments are'} />
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <p className="text-muted-foreground text-sm">Money that left the business for a supplier, against the bills it settled.</p>
+                <div className="flex flex-wrap items-end justify-end gap-3">
                     {canRecordSupplierPayment && (
                         <Button size="sm" asChild>
                             <Link href="/purchasing/payments/new">Record payment</Link>

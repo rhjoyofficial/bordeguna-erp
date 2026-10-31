@@ -133,11 +133,6 @@ export default function LeaverCheck({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Leaver check" />
             <div className="flex flex-col gap-4 p-4">
-                <p className="text-muted-foreground max-w-3xl text-sm">
-                    When someone leaves, or changes role: what they still hold, what they are responsible for, what they can sign in to, which second
-                    factors they keep, and which passwords they could read. Act on each from its own screen.
-                </p>
-
                 <section className="bg-card flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border px-5 py-4">
                     <label className="grid min-w-64 gap-1">
                         <span className="text-muted-foreground text-xs">Employee</span>
@@ -251,7 +246,6 @@ export default function LeaverCheck({
                                 ))}
                             </Section>
                         </div>
-                        <p className="text-muted-foreground text-xs">Nothing changes on this screen. Each button opens the screen that acts.</p>
                     </>
                 )}
             </div>

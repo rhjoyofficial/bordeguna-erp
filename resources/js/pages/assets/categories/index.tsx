@@ -44,10 +44,7 @@ export default function AssetCategories({ categories, trackings, can_manage }: {
             <Head title="Asset categories" />
             <div className="flex flex-col gap-4 p-4">
                 {/* The tab row above names the screen (15 Oct 2026). */}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-muted-foreground text-sm">
-                        The kinds of thing the business keeps. The code is part of every tag printed under it, so it never changes.
-                    </p>
+                <div className="flex flex-wrap items-center justify-end gap-3">
                     {can_manage && (
                         <Button size="sm" onClick={() => setDialog(null)}>
                             Add category

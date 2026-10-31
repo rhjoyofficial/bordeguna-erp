@@ -34,10 +34,7 @@ export default function WithholdingRates({ rates, canManageRates, kinds, supplie
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Tax rates" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <p className="text-muted-foreground max-w-2xl text-sm">
-                        When you pay a supplier you can hold one of these back for NBR. The supplier's type decides which rates are offered.
-                    </p>
+                <div className="flex flex-wrap items-start justify-end gap-3">
                     {/* ⚠ The whole page sits behind purchasing.suppliers.manage (its
                         route), and the buttons check the same flag again (PUR-007). */}
                     {canManageRates && (

@@ -59,9 +59,6 @@ export default function Depreciation({
             <Head title="Depreciation" />
             <div className="flex flex-col gap-4 p-4">
                 {/* The tab row above names the screen (15 Oct 2026). */}
-                <p className="text-muted-foreground text-sm">
-                    One month's wear on everything the business owns, run by a person, never on a schedule.
-                </p>
 
                 {/*
                   ⚠⚠ Not a cosmetic warning. With no mapping the engine still writes

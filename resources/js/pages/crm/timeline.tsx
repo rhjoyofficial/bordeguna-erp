@@ -857,7 +857,7 @@ function DealCard({ deals }: { deals: Deal[] }) {
             }
         >
             {deals.length === 0 ? (
-                <p className="text-muted-foreground mt-2 text-sm">No deal yet. Start one on the Pipeline when they agree to a first order.</p>
+                <p className="text-muted-foreground mt-2 text-sm">No deal yet.</p>
             ) : (
                 <ul className="mt-2 grid gap-2 text-sm">
                     {deals.map((deal) => (

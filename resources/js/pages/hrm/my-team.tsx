@@ -70,9 +70,7 @@ export default function MyTeam({
                 </div>
 
                 {team.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">
-                        Nobody reports to you in the current assignments. Reporting lines are set on the employee's transfer form.
-                    </p>
+                    <p className="text-muted-foreground text-sm">Nobody reports to you.</p>
                 ) : (
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         {team.map((member) => (

@@ -59,10 +59,6 @@ export default function SuppliersIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Suppliers" />
             <div className="flex flex-col gap-4 p-4">
-                <p className="text-muted-foreground text-sm">
-                    Who the business buys from: contact, terms, and bank details for those who may see them.
-                </p>
-
                 {/* ⚠ Behind the same permission as the popup form: an export
                     hands over bank account numbers, BIN and TIN in one file. */}
                 {mayManage && <SupplierImportPanel actions={<Button onClick={openNew}>Add supplier</Button>} />}

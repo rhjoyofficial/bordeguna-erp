@@ -185,7 +185,7 @@ export default function EmployeesIndex({
 
                 {view === 'cards' ? (
                     employees.length === 0 ? (
-                        <p className="text-muted-foreground py-4 text-center text-sm">No employees yet. Add your first team member.</p>
+                        <p className="text-muted-foreground py-4 text-center text-sm">No employees yet.</p>
                     ) : (
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                             {employees.map((employee) => (
@@ -227,7 +227,7 @@ export default function EmployeesIndex({
                             {employees.length === 0 && (
                                 <tr>
                                     <td colSpan={6} className="text-muted-foreground py-4 text-center">
-                                        No employees yet. Add your first team member.
+                                        No employees yet.
                                     </td>
                                 </tr>
                             )}

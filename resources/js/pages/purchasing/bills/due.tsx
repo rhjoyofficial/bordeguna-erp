@@ -63,7 +63,6 @@ export default function BillsDue({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h1 className="text-xl font-semibold">{t('due.title')}</h1>
-                        <p className="text-muted-foreground max-w-2xl text-sm">{t('due.intro')}</p>
                     </div>
                     <Button variant="outline" size="sm" asChild>
                         <Link href="/purchasing/bills">{t('due.all_bills')}</Link>

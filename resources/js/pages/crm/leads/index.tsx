@@ -115,8 +115,7 @@ export default function LeadsIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Leads" />
             <div className="flex flex-col gap-4 p-4">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <p className="text-muted-foreground text-sm">Shops, distributors, suppliers and people we are working to win.</p>
+                <div className="flex flex-wrap items-end justify-end gap-3">
                     <div className="flex flex-wrap items-center gap-3">
                         {see_bin && (
                             <Link href="/settings/recycle-bin?module=crm.lead" className="text-muted-foreground text-xs underline">

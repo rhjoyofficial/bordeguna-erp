@@ -582,7 +582,7 @@ export default function OtherIncomeIndex({
                                     <td colSpan={8} className="text-muted-foreground p-6 text-center">
                                         {/* ⚠ Says what the screen is for, not merely that it is
                                             empty. A blank table on a new install reads as broken. */}
-                                        No income recorded yet. Scrap sold, bank interest, rent received or a supplier refund would go here.
+                                        No income recorded yet.
                                     </td>
                                 </tr>
                             ) : (

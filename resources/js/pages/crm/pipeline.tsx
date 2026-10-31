@@ -161,8 +161,7 @@ export default function Pipeline({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Pipeline" />
             <div className="space-y-4 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-muted-foreground text-sm">Open deals by stage. Move a card when the deal moves.</p>
+                <div className="flex flex-wrap items-center justify-end gap-2">
                     <Button type="button" onClick={() => setAdding(true)}>
                         Add a deal
                     </Button>

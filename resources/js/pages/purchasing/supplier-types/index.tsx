@@ -53,10 +53,7 @@ export default function SupplierTypes({ types, canManageTypes, recordActions, de
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Supplier types" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <p className="text-muted-foreground max-w-2xl text-sm">
-                        The kinds of supplier you buy from. A supplier's type decides which TDS and VDS rates are offered when you pay them.
-                    </p>
+                <div className="flex flex-wrap items-start justify-end gap-3">
                     {canManageTypes && (
                         <Button size="sm" onClick={() => setDialog(null)}>
                             Add type

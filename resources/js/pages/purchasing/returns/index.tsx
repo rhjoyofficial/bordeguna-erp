@@ -48,8 +48,6 @@ export default function ReturnsIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('returns.title')} />
             <div className="flex flex-col gap-4 p-4">
-                <p className="text-muted-foreground text-sm">{t('returns.intro')}</p>
-
                 <section className="bg-card overflow-hidden rounded-xl border">
                     <div className="flex flex-wrap items-center justify-end gap-2 px-4 py-3">
                         <SearchSelect

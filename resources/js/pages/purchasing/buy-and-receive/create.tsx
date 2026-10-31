@@ -258,8 +258,6 @@ export default function BuyAndReceive({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('quick.title')} />
             <form onSubmit={submit} className="flex flex-col gap-6 p-4">
-                <p className="text-muted-foreground max-w-3xl text-sm">{t('quick.intro')}</p>
-
                 {blocked && (
                     <div role="alert" className="border-destructive/50 text-destructive max-w-3xl rounded-lg border p-3 text-sm">
                         {t('quick.missing')} {missing.join(', ')}.

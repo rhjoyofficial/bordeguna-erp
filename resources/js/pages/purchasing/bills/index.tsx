@@ -101,8 +101,7 @@ export default function BillsIndex({
 
             <div className="flex flex-col gap-4 p-4">
                 <PendingApprovalsNotice count={pending_approvals} what={pending_approvals === 1 ? 'bill is' : 'bills are'} />
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <p className="text-muted-foreground text-sm">What suppliers have billed, what has been paid, what is still owed.</p>
+                <div className="flex flex-wrap items-end justify-end gap-3">
                     <div className="flex flex-wrap gap-2">
                         {/* ⭐ Ruling P5 (19 Oct 2026): a bill for a supplier, across
                             their deliveries and orders, or for a service. */}

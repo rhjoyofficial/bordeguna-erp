@@ -145,7 +145,7 @@ export default function ChequeRegister({ cheques, filters, statuses, canUpdate, 
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card overflow-x-auto rounded-xl border p-4">
                     {cheques.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">No cheques. A voucher whose instrument is Cheque appears here once posted.</p>
+                        <p className="text-muted-foreground text-sm">No cheques yet.</p>
                     ) : (
                         <table className="w-full min-w-[44rem] text-sm">
                             <thead>

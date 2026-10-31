@@ -71,7 +71,7 @@ export default function Discounts() {
                                 {discounts.length === 0 && (
                                     <tr>
                                         <td colSpan={8} className="text-muted-foreground p-6 text-center">
-                                            No discounts set. Everything sells at its list price.
+                                            No discounts set.
                                         </td>
                                     </tr>
                                 )}

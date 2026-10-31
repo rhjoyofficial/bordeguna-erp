@@ -9,7 +9,7 @@ import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface Asset {
@@ -85,10 +85,7 @@ export default function AssetsIndex({
             <Head title="Fixed assets" />
             <div className="flex flex-col gap-4 p-4">
                 {/* The tab row above names the screen; only the action sits here (15 Oct 2026). */}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-muted-foreground text-sm">
-                        What the business owns and uses rather than sells: cost, what is written off, what is left on the books.
-                    </p>
+                <div className="flex flex-wrap items-center justify-end gap-3">
                     {canManage && (
                         <Button size="sm" onClick={() => setRecording(true)}>
                             Record asset
@@ -181,14 +178,6 @@ export default function AssetsIndex({
                 </div>
 
                 <Pagination meta={assets} />
-
-                <p className="text-muted-foreground text-sm">
-                    Assets wear down only when somebody runs it:{' '}
-                    <Link href="/assets/depreciation" className="underline">
-                        depreciation
-                    </Link>
-                    .
-                </p>
 
                 {canManage && (
                     <FixedAssetDialog

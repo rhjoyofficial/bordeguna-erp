@@ -48,13 +48,7 @@ export default function JournalsIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Journal register" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <p className="text-muted-foreground text-sm">
-                            Every posting from every screen: vouchers, sales, purchases, payroll, courier statements and opening balances. To write an
-                            adjustment, make a journal voucher.
-                        </p>
-                    </div>
+                <div className="flex flex-wrap items-start justify-end gap-4">
                     {/* 26 Sep 2026: a hand-written entry is a Journal voucher (draft, print,
                         reverse-and-copy, prepare/post split). The Owner-only manual screen
                         stays reachable by its address for the rare case, not from here. */}

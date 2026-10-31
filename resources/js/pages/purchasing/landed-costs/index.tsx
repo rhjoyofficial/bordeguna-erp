@@ -199,11 +199,7 @@ export default function LandedCosts({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Landed costs" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex max-w-2xl flex-col gap-1">
-                        <p className="text-muted-foreground text-sm">{t('landed.intro')}</p>
-                        <p className="text-muted-foreground text-xs">{t('landed.ias2_help')}</p>
-                    </div>
+                <div className="flex flex-wrap items-start justify-end gap-3">
                     {canManage && (
                         <Button size="sm" onClick={() => setDialog(null)}>
                             {t('landed.add')}

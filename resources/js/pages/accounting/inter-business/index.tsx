@@ -83,12 +83,6 @@ export default function InterBusinessTransfers({ fromAccounts, toAccounts, trans
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Inter-business transfers" />
             <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <p className="text-muted-foreground text-sm">
-                        Money sent to another business of the group. Booked in both: this business is owed it back, the other owes it.
-                    </p>
-                </div>
-
                 {toAccounts.length === 0 ? (
                     <p className="text-muted-foreground text-sm">You do not work in any other business, so there is nowhere to send money.</p>
                 ) : (

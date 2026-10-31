@@ -518,8 +518,7 @@ export default function ExpensesIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Expenses" />
             <div className="flex flex-col gap-4 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-muted-foreground text-sm">Rent, fuel, utilities, repairs: money that left, with the receipt behind it.</p>
+                <div className="flex flex-wrap items-center justify-end gap-3">
                     <div className="flex flex-wrap items-center gap-2">
                         <>
                             <input
@@ -625,7 +624,6 @@ export default function ExpensesIndex({
                 </div>
 
                 <Pagination meta={vouchers} />
-                <p className="text-muted-foreground text-xs">An expense is corrected by reversing it with a reason, never edited or deleted.</p>
             </div>
         </AppLayout>
     );

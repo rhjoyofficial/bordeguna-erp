@@ -125,8 +125,7 @@ export default function BankStatements({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Bank statements" />
             <div className="space-y-4 p-4">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <p className="text-muted-foreground text-sm">Import the bank's statement, then match each line to a voucher.</p>
+                <div className="flex flex-wrap items-end justify-end gap-3">
                     <select
                         className="border-input bg-background h-9 rounded-md border px-2 text-sm"
                         value={money_account_id}

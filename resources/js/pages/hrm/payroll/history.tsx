@@ -102,11 +102,7 @@ export default function PayrollHistory({ filters, employee, years, grand_total_p
                     />
                 </StatRow>
 
-                {years.length === 0 && (
-                    <p className="text-muted-foreground py-6 text-center text-sm">
-                        No payroll has been run yet. Once a month is calculated it stays here permanently.
-                    </p>
-                )}
+                {years.length === 0 && <p className="text-muted-foreground py-6 text-center text-sm">No payroll has been run yet.</p>}
 
                 {years.map((group) => (
                     <div key={group.year} className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">

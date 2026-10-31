@@ -75,10 +75,7 @@ export default function MoneyAccountsIndex({
                         </p>
                     </div>
                 )}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-muted-foreground text-sm">
-                        Every cash box, bank account, wallet, courier and gateway the business keeps money in.
-                    </p>
+                <div className="flex flex-wrap items-center justify-end gap-3">
                     {canManageMoneyAccounts && <Button onClick={() => setDialog(null)}>Add account</Button>}
                 </div>
 

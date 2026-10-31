@@ -39,8 +39,7 @@ export default function Cadences({ cadences }: { cadences: CadenceRow[] }) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cadences" />
             <div className="space-y-6 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-muted-foreground text-sm">Standing rhythms that write follow-ups by themselves.</p>
+                <div className="flex flex-wrap items-center justify-end gap-2">
                     <Button type="button" onClick={() => setAdding(true)}>
                         Start a cadence
                     </Button>
@@ -62,7 +61,7 @@ export default function Cadences({ cadences }: { cadences: CadenceRow[] }) {
                             {cadences.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="text-muted-foreground px-3 py-4 text-center">
-                                        No cadences yet - follow-ups are all manual until one runs.
+                                        No cadences yet.
                                     </td>
                                 </tr>
                             ) : (
