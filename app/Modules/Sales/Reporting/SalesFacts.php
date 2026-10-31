@@ -34,7 +34,11 @@ use Illuminate\Support\LazyCollection;
  * rata on line_net here, the rule ApplyInvoiceTax itself uses. The shares of
  * one invoice add up to its discount, so the total ties either way.
  *
- * ⚠ Brand and channel are the ORDER's, reached through the challan line
+ * ⭐ Order desk (Joy, 31 Oct 2026): one order may hold several brands, so a
+ * goods line's brand is its PRODUCT's, falling back to the order's for a
+ * product with none. Delivery charges keep the order's (lead) brand.
+ *
+ * ⚠ Channel is the ORDER's, reached through the challan line
  * (OrderBrand's path). A line with no order behind it (a counter sale, or a
  * challan raised without an order) is channel "counter"; a line whose order
  * has no brand is brand null ("No brand").
@@ -44,6 +48,9 @@ use Illuminate\Support\LazyCollection;
  */
 final class SalesFacts
 {
+    /** A goods line's brand: its product's, else its order's. */
+    private const LINE_BRAND = 'COALESCE(bp.brand_id, so.brand_id)';
+
     public const COUNTER = 'counter';
 
     /**
@@ -142,6 +149,7 @@ final class SalesFacts
             ->leftJoin('delivery_lines as dl', 'dl.id', '=', 'l.delivery_line_id')
             ->leftJoin('sales_order_lines as sol', 'sol.id', '=', 'dl.sales_order_line_id')
             ->leftJoin('sales_orders as so', 'so.id', '=', 'sol.sales_order_id')
+            ->leftJoin('products as bp', 'bp.id', '=', 'l.product_id')
             ->where('l.business_id', $this->businessId)
             ->where('inv.business_id', $this->businessId)
             ->where('inv.is_opening', false)
@@ -154,9 +162,10 @@ final class SalesFacts
             ->whereNull('l.billed_delivery_for_order_id');
 
         $this->dated($query, 'inv.invoice_date');
-        $this->narrow($query);
+        $this->narrow($query, lineBrand: true);
 
-        $query->select(['l.id', 'l.product_id', 'l.sales_invoice_id', 'so.brand_id', 'c.type as customer_type', 'l.quantity', 'l.cost_released'])
+        $query->select(['l.id', 'l.product_id', 'l.sales_invoice_id', 'c.type as customer_type', 'l.quantity', 'l.cost_released'])
+            ->selectRaw(self::LINE_BRAND.' as brand_id')
             ->selectRaw($this->channelSql().' as channel')
             ->selectRaw('l.line_net - CASE WHEN l.prices_include_tax = 1 THEN l.tax_amount + l.tax_on_discount ELSE 0 END as gross')
             ->selectRaw('(CASE WHEN ib.stored_shares <> 0 THEN l.discount_share WHEN ib.goods_base > 0 AND l.line_net > 0 THEN inv.invoice_discount * l.line_net / ib.goods_base ELSE 0 END) - l.tax_on_discount as discount')
@@ -208,13 +217,15 @@ final class SalesFacts
             ->leftJoinSub($invoicedBack, 'ib', 'ib.sales_return_line_id', '=', 'r.id')
             ->leftJoin('sales_order_lines as sol', 'sol.id', '=', 'dl.sales_order_line_id')
             ->leftJoin('sales_orders as so', 'so.id', '=', 'sol.sales_order_id')
+            ->leftJoin('products as bp', 'bp.id', '=', 'dl.product_id')
             ->where('r.business_id', $this->businessId)
             ->where('sr.business_id', $this->businessId);
 
         $this->dated($query, 'sr.returned_at');
-        $this->narrow($query);
+        $this->narrow($query, lineBrand: true);
 
-        $query->select(['r.id', 'dl.product_id', 'so.brand_id', 'c.type as customer_type', 'r.cogs_relief'])
+        $query->select(['r.id', 'dl.product_id', 'c.type as customer_type', 'r.cogs_relief'])
+            ->selectRaw(self::LINE_BRAND.' as brand_id')
             ->selectRaw($this->channelSql().' as channel')
             ->selectRaw('COALESCE(ib.quantity, 0) as quantity')
             ->selectRaw('r.credit_gross - r.tax_inside_gross as returned')
@@ -302,9 +313,13 @@ final class SalesFacts
     }
 
     /** The brand and channel filters, on the joined order (`so`). */
-    private function narrow(Builder $query): void
+    private function narrow(Builder $query, bool $lineBrand = false): void
     {
-        if ($this->brand !== null) {
+        if ($this->brand !== null && $lineBrand) {
+            $this->brand === OrderBrand::NONE
+                ? $query->whereRaw(self::LINE_BRAND.' IS NULL')
+                : $query->whereRaw(self::LINE_BRAND.' = ?', [(int) $this->brand]);
+        } elseif ($this->brand !== null) {
             OrderBrand::onOrders($query, $this->brand, 'so.brand_id');
         }
 

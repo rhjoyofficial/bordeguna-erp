@@ -143,13 +143,32 @@ function obPost(object $t, array $data, ?User $as = null)
     ]);
 }
 
-it('requires a brand on a typed order while the business sells under brands, and records it', function () {
-    obPost($this, [])->assertSessionHasErrors(['brand_id' => 'Choose the brand this order is sold under.']);
-    expect(SalesOrder::query()->count())->toBe(0);
+it('takes the lead brand from the lines when none is chosen, and records a chosen one (Joy, 31 Oct 2026)', function () {
+    $this->product->update(['brand_id' => $this->bnc->id]);
 
-    obPost($this, ['brand_id' => $this->bnc->id])->assertSessionHasNoErrors();
-
+    obPost($this, [])->assertSessionHasNoErrors();
     expect(SalesOrder::query()->sole()->brand_id)->toBe($this->bnc->id);
+
+    obPost($this, ['brand_id' => $this->lld->id])->assertSessionHasNoErrors();
+    expect(SalesOrder::query()->latest('id')->first()->brand_id)->toBe($this->lld->id);
+});
+
+it('lets one order hold two brands, led by the bigger share of the goods (Joy, 31 Oct 2026)', function () {
+    $this->product->update(['brand_id' => $this->bnc->id, 'mrp' => '100']);
+    $pickle = Product::create([
+        'business_id' => $this->business->id, 'unit_of_measure_id' => $this->product->unit_of_measure_id, 'brand_id' => $this->lld->id, 'mrp' => '750',
+        'sku' => 'SKU-PICKLE', 'name' => 'Hilsa Fish Pickle - 200g', 'type' => ProductType::FinishedGood,
+    ]);
+    ProductPrice::create(['business_id' => $this->business->id, 'product_id' => $pickle->id, 'unit_price' => '750', 'effective_from' => '2026-01-01']);
+
+    obPost($this, ['lines' => [
+        ['product_id' => $this->product->id, 'quantity' => '2'],
+        ['product_id' => $pickle->id, 'quantity' => '1'],
+    ]])->assertSessionHasNoErrors();
+
+    $order = SalesOrder::query()->sole();
+    expect($order->brand_id)->toBe($this->lld->id)
+        ->and($order->lines()->count())->toBe(2);
 });
 
 it('takes a typed order without a brand where the business has none in use', function () {

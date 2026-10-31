@@ -19,7 +19,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
-import { lineBrandMismatch, productsForBrand } from '@/lib/brand-products';
 import { dhakaToday, formatDate, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { plainPrice, salesLineTotal, salesUnitPriceFor, type SalesEntryMode } from '@/lib/sales-line';
@@ -367,7 +366,6 @@ function OrderLineRow({
     onChange,
     onPriced,
     onRemove,
-    brandId,
     brandNames,
     discountCap,
 }: {
@@ -385,8 +383,7 @@ function OrderLineRow({
     onChange: (patch: Partial<LineDraft>) => void;
     onPriced: (price: LinePrice | undefined) => void;
     onRemove: () => void;
-    /** The order's brand ('' = none chosen) and every brand's name, for the warning. */
-    brandId: string;
+    /** Every brand's name, for the line's brand chip. */
     brandNames: Map<number, string>;
     /** The person's Discount % cap (null = the Owner, no cap). */
     discountCap: number | null;
@@ -444,7 +441,8 @@ function OrderLineRow({
     }, [customerId, warehouseId, orderDate, line.product_id, line.quantity, line.is_gift]);
 
     const product = products.find((p) => String(p.id) === line.product_id);
-    const otherBrand = lineBrandMismatch(product, brandId);
+    // ⭐ Order desk (Joy, 31 Oct 2026): one order holds any brand; the line says whose.
+    const lineBrand = product?.brand_id ? brandNames.get(product.brand_id) : undefined;
     const listed = !line.is_gift && price?.unit_price ? money2(price.unit_price) : '';
     const unitPrice = line.is_gift ? '0.00' : effectiveUnit(line, price?.unit_price);
     // The box typed last is shown as typed; the other one is worked out.
@@ -470,13 +468,14 @@ function OrderLineRow({
                 <SearchableSelect
                     value={line.product_id}
                     onChange={(v) => onChange({ product_id: v, unit_price: '', line_total: '', entry_mode: 'rate' })}
-                    options={productsForBrand(products, brandId, line.product_id).map((p) => ({
+                    options={products.map((p) => ({
                         value: String(p.id),
                         label: p.sku ? `${p.sku} - ${p.name}` : p.name,
                     }))}
                     placeholder={t('orders.select_product')}
                     searchPlaceholder={t('orders.search_products')}
                 />
+                {lineBrand && <BrandBadge name={lineBrand} />}
                 <InputError message={errors[`lines.${index}.product_id`]} />
             </div>
             <div className="grid gap-1">
@@ -591,11 +590,6 @@ function OrderLineRow({
             {solved !== null && !solved.exact && (
                 <p className={`text-xs text-amber-700 dark:text-amber-400 ${UNDER_LINE}`}>
                     {t('orders.total_not_exact', { typed: money(parseFloat(line.line_total)), total: money(parseFloat(solved.total)) })}
-                </p>
-            )}
-            {otherBrand !== null && (
-                <p className={`text-xs text-amber-700 dark:text-amber-400 ${UNDER_LINE}`}>
-                    {t('orders.other_brand', { brand: brandNames.get(otherBrand) ?? '' })}
                 </p>
             )}
             {loss !== null && lastCost !== null && (
@@ -772,7 +766,6 @@ function CreateOrderForm({
     customerTypes,
     priceGroups,
     brands,
-    lastBrandId,
     lastWarehouseId,
     districts,
     onClose,
@@ -797,17 +790,13 @@ function CreateOrderForm({
     customerTypes: CustomerType[];
     priceGroups: PriceGroupOption[];
     brands: BrandOption[];
-    lastBrandId: number | null;
     lastWarehouseId: number | null;
     districts: string[];
     onClose: () => void;
     initialCustomerId?: number | null;
 }) {
-    // ⭐ Joy, 11 Oct 2026: every order carries its brand. Required while the
-    // business sells under brands; the person's last brand is offered first.
-    const activeBrands = brands.filter((b) => b.is_active !== false);
+    // ⭐ Order desk (31 Oct 2026): no brand step; each line shows its brand.
     const brandNames = new Map(brands.map((b) => [b.id, b.name]));
-    const initialBrand = activeBrands.find((b) => b.id === lastBrandId)?.id ?? (activeBrands.length === 1 ? activeBrands[0].id : null);
     const { t } = useTranslation();
     const today = dhakaToday();
     const editing = seed !== null && seed.mode !== 'copy' && seed.id !== null;
@@ -848,7 +837,8 @@ function CreateOrderForm({
         // ⭐ 25 Oct 2026 (Q16 = A): why a market product goes below its minimum price.
         floor_reason: '',
         customer_id: seed ? String(seed.customer_id) : initialCustomerId ? String(initialCustomerId) : '',
-        brand_id: seed?.brand_id ? String(seed.brand_id) : initialBrand === null ? '' : String(initialBrand),
+        // ⭐ Order desk: never asked; the server sets the lead brand from the lines.
+        brand_id: '',
         // F24: the warehouse this person last took an order for, else the
         // default; "decided at delivery" is one click away.
         warehouse_id: seed
@@ -1218,22 +1208,6 @@ function CreateOrderForm({
                                 />
                                 <InputError message={errors.customer_id} />
                             </div>
-                            {activeBrands.length > 0 && (
-                                <div className="grid w-full gap-2 sm:w-44">
-                                    <Label htmlFor="order-brand" required>
-                                        {t('orders.brand')}
-                                    </Label>
-                                    <SearchSelect id="order-brand" value={data.brand_id} onChange={(e) => setData('brand_id', e.target.value)}>
-                                        <option value="">{t('orders.choose_brand')}</option>
-                                        {activeBrands.map((b) => (
-                                            <option key={b.id} value={String(b.id)}>
-                                                {b.name}
-                                            </option>
-                                        ))}
-                                    </SearchSelect>
-                                    <InputError message={errors.brand_id} />
-                                </div>
-                            )}
                             <div className="grid w-full gap-2 sm:w-52">
                                 <Label>{t('orders.warehouse')}</Label>
                                 <SearchableSelect
@@ -1381,7 +1355,6 @@ function CreateOrderForm({
                                     onChange={(patch) => updateLine(line.uid, patch)}
                                     onPriced={(price) => setPrices((current) => ({ ...current, [line.uid]: price }))}
                                     onRemove={() => removeLine(line.uid)}
-                                    brandId={data.brand_id}
                                     brandNames={brandNames}
                                     discountCap={discountCap}
                                 />
@@ -1903,7 +1876,6 @@ export default function SalesOrdersIndex({
     own_only = false,
     preselect_customer = null,
     brands = [],
-    last_brand_id = null,
     last_warehouse_id = null,
     districts = [],
     edit_order = null,
@@ -1932,7 +1904,6 @@ export default function SalesOrdersIndex({
     own_only?: boolean;
     preselect_customer?: number | null;
     brands?: BrandOption[];
-    last_brand_id?: number | null;
     last_warehouse_id?: number | null;
     districts?: string[];
     /** Corrections wave 1: the order the form opens on (?edit= / ?copy=). */
@@ -1991,7 +1962,6 @@ export default function SalesOrdersIndex({
                         customerTypes={customer_types}
                         priceGroups={price_groups}
                         brands={brands}
-                        lastBrandId={last_brand_id}
                         lastWarehouseId={last_warehouse_id}
                         districts={districts}
                         commissionAgents={commission_agents}
