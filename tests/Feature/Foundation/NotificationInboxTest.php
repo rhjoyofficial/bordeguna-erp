@@ -136,4 +136,3 @@ it('refuses to let one person mark another person notification unread', function
 it('refuses a guest', function () {
     $this->get(route('notifications.index'))->assertRedirect(route('login'));
 });
-
