@@ -24,7 +24,7 @@ import { useTranslation } from '@/lib/i18n';
 import { plainPrice, salesLineTotal, salesUnitPriceFor, type SalesEntryMode } from '@/lib/sales-line';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { PackageCheck } from 'lucide-react';
 import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
@@ -890,8 +890,8 @@ function CreateOrderForm({
             : [newLine()],
     });
     const [prices, setPrices] = useState<Record<number, LinePrice | undefined>>({});
-    // ⭐ Order desk: "Save and book" or "Save" (read when the form is sent).
-    const bookNow = useRef(false);
+    // ⭐ Order desk: "Save", "Save and book" or "Save and hand over" (read when the form is sent).
+    const thenAction = useRef<'save' | 'book' | 'handover'>('save');
     const payAccounts = [...options.paid_accounts, ...options.cash_accounts.filter((c) => !options.paid_accounts.some((a) => a.id === c.id))];
     const courierAccounts = options.courier_accounts ?? [];
     const canBook = !editing && data.delivery_method === 'courier' && courierAccounts.length > 0;
@@ -937,8 +937,8 @@ function CreateOrderForm({
         order_discount: form.order_discount.trim() === '' ? '0' : form.order_discount.trim(),
         // ⭐ Order desk: only filled rows, and only on a new order.
         payments: editing ? [] : form.payments.filter((row) => row.money_account_id !== '' && Number(row.amount) > 0),
-        then: !editing && bookNow.current ? 'book' : 'save',
-        courier_account_id: !editing && bookNow.current ? form.courier_account_id : '',
+        then: editing ? 'save' : thenAction.current,
+        courier_account_id: !editing && thenAction.current === 'book' ? form.courier_account_id : '',
     }));
 
     // F36: the recipient starts as the customer (name, phone, address typed on
@@ -990,7 +990,7 @@ function CreateOrderForm({
         e.preventDefault();
         // ⭐ Order desk: the button pressed says whether the courier is booked too.
         const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-        bookNow.current = submitter?.value === 'book';
+        thenAction.current = submitter?.value === 'book' || submitter?.value === 'handover' ? submitter.value : 'save';
 
         if (editing && seed?.id) {
             put(route('sales.orders.update', seed.id), clearPassword);
@@ -1826,7 +1826,17 @@ function CreateOrderForm({
                             · {t('orders.summary_dated')} {showDate(data.ordered_at || today)}
                         </span>
                     </p>
-                    {canBook ? (
+                    {!editing && data.delivery_method === 'hand' ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button type="submit" name="then" value="save" variant="outline" disabled={processing || unpriced}>
+                                Save only
+                            </Button>
+                            <Button type="submit" name="then" value="handover" disabled={processing || unpriced} className="w-fit">
+                                Save and hand over
+                            </Button>
+                            <InputError message={lineErrors.then} />
+                        </div>
+                    ) : canBook ? (
                         <div className="flex flex-wrap items-center gap-2">
                             <SearchSelect
                                 aria-label="Courier"
@@ -1876,6 +1886,7 @@ export default function SalesOrdersIndex({
     own_only = false,
     preselect_customer = null,
     brands = [],
+    can_approve_and_book = false,
     last_warehouse_id = null,
     districts = [],
     edit_order = null,
@@ -1904,6 +1915,8 @@ export default function SalesOrdersIndex({
     own_only?: boolean;
     preselect_customer?: number | null;
     brands?: BrandOption[];
+    /** ⭐ Order desk: approve the ticked waiting orders and send them to the courier. */
+    can_approve_and_book?: boolean;
     last_warehouse_id?: number | null;
     districts?: string[];
     /** Corrections wave 1: the order the form opens on (?edit= / ?copy=). */
@@ -1925,6 +1938,9 @@ export default function SalesOrdersIndex({
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/orders', initialFilters);
     // ⭐ The form is at the top, one click away (21 Sep 2026): it used to sit
     // under the whole order list and the stock table.
+    // ⭐ Order desk (Joy's decision 3): tick waiting orders, then Approve and book.
+    const bulkApprove = can_approve_and_book && filters.queue === 'approval';
+    const [ticked, setTicked] = useState<number[]>([]);
     const [creating, setCreating] = useState(
         () =>
             edit_order !== null ||
@@ -2055,10 +2071,38 @@ export default function SalesOrdersIndex({
                     </div>
                 )}
 
+                {bulkApprove && ticked.length > 0 && (
+                    <div className="bg-muted/60 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                        <span className="font-medium">{ticked.length} selected</span>
+                        <Button
+                            size="sm"
+                            onClick={() =>
+                                router.post(
+                                    route('sales.orders.approve-and-book'),
+                                    { ids: ticked },
+                                    { preserveScroll: true, onSuccess: () => setTicked([]) },
+                                )
+                            }
+                        >
+                            Approve and book
+                        </Button>
+                    </div>
+                )}
+
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[60rem] text-sm">
                         <thead>
                             <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
+                                {bulkApprove && (
+                                    <th className="w-8 py-2">
+                                        <input
+                                            type="checkbox"
+                                            aria-label="Select all on this page"
+                                            checked={orders.data.length > 0 && orders.data.every((o) => ticked.includes(o.id))}
+                                            onChange={(e) => setTicked(e.target.checked ? orders.data.map((o) => o.id) : [])}
+                                        />
+                                    </th>
+                                )}
                                 <th className="py-2">{t('orders.col_number')}</th>
                                 <th className="py-2">{t('orders.col_customer')}</th>
                                 <th className="py-2">{t('orders.col_brand')}</th>
@@ -2076,6 +2120,20 @@ export default function SalesOrdersIndex({
                         <tbody>
                             {orders.data.map((order) => (
                                 <tr key={order.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                    {bulkApprove && (
+                                        <td className="py-2">
+                                            <input
+                                                type="checkbox"
+                                                aria-label={`Select ${order.order_number}`}
+                                                checked={ticked.includes(order.id)}
+                                                onChange={() =>
+                                                    setTicked((now) =>
+                                                        now.includes(order.id) ? now.filter((id) => id !== order.id) : [...now, order.id],
+                                                    )
+                                                }
+                                            />
+                                        </td>
+                                    )}
                                     <td className="py-2">
                                         <Link href={route('sales.orders.show', order.id)} className="underline">
                                             {order.order_number}
