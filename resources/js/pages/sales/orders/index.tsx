@@ -158,7 +158,12 @@ export type OrderOptions = {
     riders: { id: number; name: string }[];
     may_backdate: boolean;
     may_change_courier_charge: boolean;
+    /** ⭐ Order desk (31 Oct 2026): the accounts "Save and book" may use. */
+    courier_accounts?: { id: number; label: string }[];
 };
+
+/** ⭐ Order desk: one way the customer paid with the order. */
+type PaymentRow = { money_account_id: string; amount: string; reference: string };
 
 /**
  * ⭐ Corrections wave 1 (20 Oct 2026): the order the form opens on, to Edit it
@@ -835,6 +840,8 @@ function CreateOrderForm({
             paid_money_account_id: string;
             paid_reference: string;
             order_discount: string;
+            payments: PaymentRow[];
+            courier_account_id: string;
         }
     >({
         ...NO_OVERRIDE,
@@ -876,6 +883,8 @@ function CreateOrderForm({
         paid_money_account_id: '',
         paid_reference: '',
         order_discount: seed?.order_discount ?? '',
+        payments: [],
+        courier_account_id: '',
         lines: seed
             ? seed.lines.map((line) => ({
                   ...newLine(),
@@ -891,6 +900,16 @@ function CreateOrderForm({
             : [newLine()],
     });
     const [prices, setPrices] = useState<Record<number, LinePrice | undefined>>({});
+    // ⭐ Order desk: "Save and book" or "Save" (read when the form is sent).
+    const bookNow = useRef(false);
+    const payAccounts = [...options.paid_accounts, ...options.cash_accounts.filter((c) => !options.paid_accounts.some((a) => a.id === c.id))];
+    const courierAccounts = options.courier_accounts ?? [];
+    const canBook = !editing && data.delivery_method === 'courier' && courierAccounts.length > 0;
+    const setPayment = (index: number, patch: Partial<PaymentRow>) =>
+        setData(
+            'payments',
+            data.payments.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+        );
     const [quickOpen, setQuickOpen] = useState(false);
     const [typedCustomer, setTypedCustomer] = useState('');
     const lineErrors = errors as Record<string, string | undefined>;
@@ -926,6 +945,10 @@ function CreateOrderForm({
         paid_money_account_id: form.payment === 'ssl_paid' ? form.paid_money_account_id : '',
         paid_reference: form.payment === 'ssl_paid' ? form.paid_reference : '',
         order_discount: form.order_discount.trim() === '' ? '0' : form.order_discount.trim(),
+        // ⭐ Order desk: only filled rows, and only on a new order.
+        payments: editing ? [] : form.payments.filter((row) => row.money_account_id !== '' && Number(row.amount) > 0),
+        then: !editing && bookNow.current ? 'book' : 'save',
+        courier_account_id: !editing && bookNow.current ? form.courier_account_id : '',
     }));
 
     // F36: the recipient starts as the customer (name, phone, address typed on
@@ -975,6 +998,9 @@ function CreateOrderForm({
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+        // ⭐ Order desk: the button pressed says whether the courier is booked too.
+        const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+        bookNow.current = submitter?.value === 'book';
 
         if (editing && seed?.id) {
             put(route('sales.orders.update', seed.id), clearPassword);
@@ -1017,6 +1043,8 @@ function CreateOrderForm({
     const chargeValue = data.delivery_method === 'hand' ? 0 : Number.isFinite(charge) && charge > 0 ? charge : 0;
     const orderDiscount = Math.max(0, parseFloat(data.order_discount) || 0);
     const total = goods - discounts - orderDiscount + chargeValue;
+    // ⭐ Order desk: what the payment rows already cover.
+    const paidNow = data.payments.reduce((sum, row) => sum + (row.money_account_id !== '' && Number(row.amount) > 0 ? Number(row.amount) : 0), 0);
 
     // ⭐ B18: the courier's zone charge for the district, and a repeated shop
     // order number, asked of the server as they are typed.
@@ -1670,6 +1698,88 @@ function CreateOrderForm({
                                 </>
                             )}
                         </div>
+                        {!editing && payAccounts.length > 0 && (
+                            <div className="mt-3 grid gap-2">
+                                <Label>Paid with the order</Label>
+                                {data.payments.map((row, index) => (
+                                    <div key={index} className="flex flex-wrap items-start gap-2">
+                                        <div className="grid w-full gap-1 sm:w-56">
+                                            <SearchSelect
+                                                aria-label="Paid into"
+                                                value={row.money_account_id}
+                                                onChange={(e) => setPayment(index, { money_account_id: e.target.value })}
+                                            >
+                                                <option value="">Paid into</option>
+                                                {payAccounts.map((a) => (
+                                                    <option key={a.id} value={String(a.id)}>
+                                                        {a.name}
+                                                    </option>
+                                                ))}
+                                            </SearchSelect>
+                                            <InputError message={lineErrors[`payments.${index}.money_account_id`]} />
+                                        </div>
+                                        <div className="grid w-full gap-1 sm:w-32">
+                                            <Input
+                                                aria-label="Amount"
+                                                inputMode="decimal"
+                                                placeholder="Amount"
+                                                className="text-right tabular-nums"
+                                                value={row.amount}
+                                                onChange={(e) => setPayment(index, { amount: e.target.value })}
+                                            />
+                                            <InputError message={lineErrors[`payments.${index}.amount`]} />
+                                        </div>
+                                        <Input
+                                            aria-label="Reference"
+                                            placeholder="bKash TrxID"
+                                            className="w-full sm:w-44"
+                                            value={row.reference}
+                                            onChange={(e) => setPayment(index, { reference: e.target.value })}
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() =>
+                                                setData(
+                                                    'payments',
+                                                    data.payments.filter((_, i) => i !== index),
+                                                )
+                                            }
+                                        >
+                                            Remove
+                                        </Button>
+                                    </div>
+                                ))}
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-fit"
+                                        onClick={() =>
+                                            setData('payments', [
+                                                ...data.payments,
+                                                {
+                                                    money_account_id: '',
+                                                    amount: String(Math.max(0, total - paidNow)),
+                                                    reference: '',
+                                                },
+                                            ])
+                                        }
+                                    >
+                                        + Add payment
+                                    </Button>
+                                    {paidNow > 0 && (
+                                        <span className="text-sm tabular-nums">
+                                            Paid {money(paidNow)} · Rest {money(Math.max(0, total - paidNow))}
+                                            {data.delivery_method === 'courier' && total - paidNow > 0 ? ' (courier collects)' : ''}
+                                        </span>
+                                    )}
+                                </div>
+                                <InputError message={lineErrors.payments} />
+                            </div>
+                        )}
                     </FormSection>
 
                     <FormSection title={t('orders.section_notes')}>
@@ -1743,9 +1853,34 @@ function CreateOrderForm({
                             · {t('orders.summary_dated')} {showDate(data.ordered_at || today)}
                         </span>
                     </p>
-                    <Button disabled={processing || unpriced} className="w-fit">
-                        {editing ? t('corr.sales.order.save') : t('orders.record')}
-                    </Button>
+                    {canBook ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <SearchSelect
+                                aria-label="Courier"
+                                className="w-56"
+                                value={data.courier_account_id}
+                                onChange={(e) => setData('courier_account_id', e.target.value)}
+                            >
+                                <option value="">Courier: default for the order</option>
+                                {courierAccounts.map((a) => (
+                                    <option key={a.id} value={String(a.id)}>
+                                        {a.label}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                            <Button type="submit" name="then" value="save" variant="outline" disabled={processing || unpriced}>
+                                Save only
+                            </Button>
+                            <Button type="submit" name="then" value="book" disabled={processing || unpriced} className="w-fit">
+                                Save and book
+                            </Button>
+                            <InputError message={lineErrors.then ?? lineErrors.courier_account_id} />
+                        </div>
+                    ) : (
+                        <Button disabled={processing || unpriced} className="w-fit">
+                            {editing ? t('corr.sales.order.save') : t('orders.record')}
+                        </Button>
+                    )}
                 </div>
             </form>
         </>
