@@ -78,6 +78,8 @@ use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OrderChannelDetails;
+use App\Modules\Sales\Support\OrderDeskBooking;
+use App\Modules\Sales\Support\OrderDeskPayments;
 use App\Modules\Sales\Support\OrderNextSteps;
 use App\Modules\Sales\Support\OrderReservations;
 use App\Modules\Sales\Support\OrderStage;
@@ -1028,6 +1030,15 @@ class SalesOrderController extends Controller
             // ⭐ B18 (25 Oct 2026): channel, reference, delivery method, payment,
             // order discount and gift lines (OrderChannelDetails).
             ...OrderChannelDetails::rules((int) app(BusinessContext::class)->id()),
+            // ⭐ Order desk (Joy, 31 Oct 2026): what the customer paid with the
+            // order, any number of ways (bKash 500 + cash 300), and what happens
+            // after the save: nothing more, or straight to the courier.
+            'payments' => ['nullable', 'array', 'max:8'],
+            'payments.*.money_account_id' => ['required', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            'payments.*.amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
+            'payments.*.reference' => ['nullable', 'string', 'max:120'],
+            'then' => ['nullable', Rule::in(['save', 'book'])],
+            'courier_account_id' => ['nullable', 'integer'],
         ], [
             'ordered_at.before_or_equal' => 'An order cannot be dated in the future.',
             'expected_date.after_or_equal' => 'The expected date cannot be before the order date.',
@@ -1062,6 +1073,8 @@ class SalesOrderController extends Controller
         }
 
         $paidAccount = self::paidOnlineAccount($data, $request->user());
+        $payments = OrderDeskPayments::check($data['payments'] ?? [], $request->user());
+        $bookWith = ($data['then'] ?? 'save') === 'book' ? OrderDeskBooking::account($data['courier_account_id'] ?? null, $request->user()) : null;
 
         // ⚠⚠ A typed price is a margin decision (21 Sep 2026): whoever may take an
         // order had it for any figure, with nothing to say who chose it. Only a
@@ -1184,7 +1197,7 @@ class SalesOrderController extends Controller
         // so a product the price file never reached refuses the order here. The
         // exception names the product; say so on the form.
         try {
-            $order = DB::transaction(function () use ($action, $customer, $products, $data, $user, $destination, $deliveryCharge, $authoriser, $floorLines, $request, $details, $paidAccount, $exchangeFor, $agent) {
+            $order = DB::transaction(function () use ($action, $customer, $products, $data, $user, $destination, $deliveryCharge, $authoriser, $floorLines, $request, $details, $paidAccount, $exchangeFor, $agent, $payments) {
                 if ($exchangeFor !== null) {
                     self::assertExchangeOpen(SalesReturn::query()->whereKey($exchangeFor->id)->lockForUpdate()->firstOrFail(), $customer);
                 }
@@ -1229,6 +1242,7 @@ class SalesOrderController extends Controller
                 $order->forceFill($details['attributes'])->save();
                 OrderChannelDetails::assertOrderDiscount($order, $user);
                 self::markPaidOnline($order, $paidAccount, $data, $user);
+                OrderDeskPayments::record($order, $payments, $user);
 
                 // ⭐ B20: the replacement order of an exchange, linked to its return.
                 if ($exchangeFor !== null) {
@@ -1272,6 +1286,13 @@ class SalesOrderController extends Controller
                 summary: "Sales order {$order->order_number} for {$customer->name}",
                 excludeUserId: $user->id,
             );
+        }
+
+        // ⭐ Order desk: "Save and book" sends an approved order to the courier
+        // through the same run the Parcels screen uses (every check of it).
+        if ($bookWith !== null) {
+            return redirect()->route('sales.orders.show', $order)
+                ->with('success', OrderDeskBooking::start($order, $bookWith, $user));
         }
 
         return redirect()->route('sales.orders.show', $order)
@@ -1397,6 +1418,12 @@ class SalesOrderController extends Controller
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName()])->values(),
             'may_backdate' => OrderChannelDetails::mayBackdate($user),
             'may_change_courier_charge' => OrderChannelDetails::mayChangeCourierCharge($user),
+            // ⭐ Order desk (31 Oct 2026): the accounts "Save and book" may use,
+            // for whoever may book parcels (Joy's decision 1: any of them).
+            'courier_accounts' => $user->can('sales.sell') && $user->can('couriers.parcels.book')
+                ? ParcelPresenter::bookableAccounts((int) app(BusinessContext::class)->id())
+                    ->map(fn ($account) => ['id' => $account->id, 'label' => $account->label])->values()
+                : [],
         ];
     }
 
