@@ -52,14 +52,14 @@ final class StaffPurchaseLimits
     }
 
     /** Serialise this employee's cycle. Inside a transaction, before any check. */
-    public static function lockMonth(Employee $employee, Carbon $month): void
+    public static function lockMonth(Employee $employee, int $businessId, Carbon $month): void
     {
         $cycle = PayrollCycle::containing($month);
         $key = ['employee_id' => $employee->id, 'year' => $cycle['year'], 'month' => $cycle['month']];
 
         if (! DB::table('staff_purchase_month_counters')->where($key)->exists()) {
             DB::table('staff_purchase_month_counters')->insertOrIgnore($key + [
-                'business_id' => $employee->business_id,
+                'business_id' => $businessId,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

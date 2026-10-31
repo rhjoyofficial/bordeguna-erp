@@ -129,7 +129,7 @@ class StaffPurchaseController extends Controller
         $number = DB::transaction(function () use ($employee, $businessId, $data, $products, $warehouse, $month, $request) {
             // ⚠⚠ The month lock first, then every check (StaffPurchaseLimits):
             // two requests for the last of an allowance are serialised here.
-            StaffPurchaseLimits::lockMonth($employee, $month);
+            StaffPurchaseLimits::lockMonth($employee, $businessId, $month);
 
             $lines = [];
 
@@ -291,7 +291,7 @@ class StaffPurchaseController extends Controller
         $user = $request->user();
 
         $number = DB::transaction(function () use ($employee, $businessId, $data, $product, $warehouse, $price, $user) {
-            StaffPurchaseLimits::lockMonth($employee, Carbon::now());
+            StaffPurchaseLimits::lockMonth($employee, $businessId, Carbon::now());
 
             $row = StaffPurchaseRequest::create([
                 'business_id' => $businessId,
@@ -385,7 +385,7 @@ class StaffPurchaseController extends Controller
                 $warehouse = isset($data['warehouse_id']) ? Warehouse::findOrFail($data['warehouse_id']) : $this->warehouse($row->warehouse_id);
                 $before = $row->lines->mapWithKeys(fn (StaffPurchaseLine $l) => [$l->id => (string) $l->staff_price])->all();
 
-                StaffPurchaseLimits::lockMonth($employee, $month);
+                StaffPurchaseLimits::lockMonth($employee, $row->business_id, $month);
                 StaffPurchaseLimits::assert($employee, $row->business_id, $month, $this->limitLines($row), $row->id, 'approval');
 
                 // A re-approval: whatever was still held is let go and re-reserved.
@@ -488,7 +488,7 @@ class StaffPurchaseController extends Controller
 
                 // The limits once more (ruling Q3: never let a stale approval
                 // bypass them), then the reserved slices.
-                StaffPurchaseLimits::lockMonth($employee, $month);
+                StaffPurchaseLimits::lockMonth($employee, $row->business_id, $month);
                 StaffPurchaseLimits::assert($employee, $row->business_id, $month, $this->limitLines($row), $row->id, 'handover');
                 $this->pricing->assertReservationsHold($row);
 
